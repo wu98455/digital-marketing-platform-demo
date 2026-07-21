@@ -1,0 +1,15 @@
+---
+description: 列表页分页与查询区统一用 listPagination / listSearchProps，新页面必须沿用。
+alwaysApply: true
+---
+
+# 列表页统一约定
+
+新建或改造带表格的页面时：
+
+1. **分页**：`pagination={listPagination}`（来自 `@/utils/listSearch`）
+   - 大尺寸、默认 10 条/页、`showQuickJumper`（跳至）、`showSizeChanger`
+   - 弹窗等需改条数：`pagination={{ ...listPagination, pageSize: 20, defaultPageSize: 20 }}`
+2. **查询区**：`search={listSearchProps}`（一排 4 个，默认 2 行可展开）
+3. **不要**单独写 `pagination={{ defaultPageSize: 20 }}` 或 `size: 'small'`，除非用户明确要求例外
+4. **布局默认**：`config/defaultSettings.ts` 中 `layout: 'side'`（侧边菜单）

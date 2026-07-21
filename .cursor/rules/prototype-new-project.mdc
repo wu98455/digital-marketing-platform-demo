@@ -1,0 +1,37 @@
+---
+description: 按原型指南新建客户原型时，自动执行复制模板、删 .git、git init、生成项目对照表等流程。用户提及「原型指南」「新建原型」「部署 demo」时启用。
+alwaysApply: false
+---
+
+# 原型新建项目规则
+
+用户要求按 `原型指南.md` 新建原型时，必须：
+
+1. 阅读项目内或 `D:\dev\projects\antd-prototype-starter\原型指南.md`
+2. **命名方案 A（默认）：** 本地文件夹**中文**，GitHub 仓库 / Pages **英文**
+3. 用户手动复制或 AI 执行：`xcopy /E /I D:\dev\projects\antd-prototype-starter D:\dev\projects\{中文文件夹名}`
+4. **复制后立即自动执行（禁止跳过）：**
+   ```powershell
+   cd D:\dev\projects\{中文文件夹名}
+   Remove-Item -Recurse -Force .git
+   git init
+   ```
+5. **紧接着自动执行（禁止跳过）：** 根据**文件夹名称**在项目根目录生成 `项目对照表.md`：
+   - 本地文件夹名 = 实际中文名
+   - 系统标题 = `{文件夹名}演示系统`（用户指定则用指定值）
+   - GitHub 仓库名 = 中文转拼音小写连字符 + `-demo`（如 `示例项目` → `demo-project`）
+   - Demo 链接、PUBLIC_PATH、远程地址写入对照表
+   - 后续所有配置以对照表为准
+6. 按对照表改 `config/config.ts` 的 `PUBLIC_PATH`（或通过 `build:pages` 脚本）、`package.json` 的 `name`、`deploy-pages.yml`
+7. 不在母版 `antd-prototype-starter` 上改客户业务
+8. **日常改原型只本地预览**（`pnpm start`），**禁止**改完一点就 push；仅用户明确要求「推到 GitHub / 部署」时再 push
+9. 用户要求 push 时，先确认代理（端口 7892）
+
+## 技术栈说明（Pro v6）
+
+- 框架：**Umi Max 4** + 官方 **Ant Design Pro v6 simple**
+- 开发：`pnpm start`（默认启用 mock）→ 浏览器 http://localhost:8000
+- 构建：`pnpm build`；GitHub Pages：`pnpm build:pages`（设置 `PUBLIC_PATH`）
+- 路由：`config/routes.ts`；布局：`config/defaultSettings.ts`
+- Mock：`mock/` 目录
+- 部署：推送 `main` 后 Actions 发布；**时机由用户控制**

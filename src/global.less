@@ -1,0 +1,195 @@
+@font-face {
+  font-family: "AlibabaSans";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("//mdn.alipayobjects.com/huamei_iwk9zp/afts/file/A*1GSgSYDD_aIAAAAAQsAAAAgAegCCAQ/AlibabaSans-Light.woff2")
+    format("woff2");
+}
+@font-face {
+  font-family: "AlibabaSans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("//mdn.alipayobjects.com/huamei_iwk9zp/afts/file/A*2zEUQqnPNesAAAAAQtAAAAgAegCCAQ/AlibabaSans-Regular.woff2")
+    format("woff2");
+}
+@font-face {
+  font-family: "AlibabaSans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("//mdn.alipayobjects.com/huamei_iwk9zp/afts/file/A*E_cxRbMlZqUAAAAAQuAAAAgAegCCAQ/AlibabaSans-Medium.woff2")
+    format("woff2");
+}
+@font-face {
+  font-family: "AlibabaSans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("//mdn.alipayobjects.com/huamei_iwk9zp/afts/file/A*E_cxRbMlZqUAAAAAQuAAAAgAegCCAQ/AlibabaSans-Bold.woff2")
+    format("woff2");
+}
+@font-face {
+  font-family: "AlibabaSans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("//mdn.alipayobjects.com/huamei_iwk9zp/afts/file/A*E_cxRbMlZqUAAAAAQuAAAAgAegCCAQ/AlibabaSans-Heavy.woff2")
+    format("woff2");
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family:
+    AlibabaSans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans',
+    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+.colorWeak {
+  filter: invert(80%);
+}
+
+.ant-layout {
+  min-height: 100vh;
+}
+.ant-pro-sider.ant-layout-sider.ant-pro-sider-fixed {
+  left: unset;
+}
+
+.ant-pro-sider-collapsed .ant-pro-sider-link span:not([role='img']) {
+  display: none;
+}
+
+canvas {
+  display: block;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+@media (max-width: 768px) {
+  .ant-table {
+    width: 100%;
+    overflow-x: auto;
+    &-thead > tr,
+    &-tbody > tr {
+      > th,
+      > td {
+        white-space: pre;
+        > span {
+          display: block;
+        }
+      }
+    }
+  }
+}
+
+/* =========================================================
+ * 内容分层：白底面板 vs 灰底画布
+ * 描边加在 ProCard 外层容器，不要加在内部 QueryFilter 表单上。
+ * ========================================================= */
+@panel-border: var(--ant-color-border-secondary, #f0f0f0);
+@panel-radius: var(--ant-border-radius-lg, 8px);
+@panel-bg: var(--ant-color-bg-container, #fff);
+
+.panel-surface() {
+  background: @panel-bg;
+  border: 1px solid @panel-border;
+  border-radius: @panel-radius;
+  box-shadow: none;
+}
+
+.panel-surface {
+  .panel-surface();
+}
+
+/* 左侧目录树：行高 28；三角与文件夹间距收紧 */
+.panel-surface .ant-tree.ant-tree-directory,
+.panel-surface .ant-tree {
+  .ant-tree-treenode {
+    padding: 1px 0;
+    align-items: center;
+  }
+
+  .ant-tree-switcher {
+    width: 16px;
+    margin-inline-end: 4px;
+    line-height: 28px;
+    align-self: center;
+  }
+
+  .ant-tree-node-content-wrapper {
+    min-height: 28px;
+    line-height: 28px;
+    padding-inline: 0 4px;
+  }
+
+  .ant-tree-iconEle {
+    width: 16px;
+    height: 28px;
+    margin-inline-end: 6px;
+    line-height: 28px;
+  }
+
+  .ant-tree-title {
+    line-height: 28px;
+  }
+}
+
+/* 查询区外层：FormRender 渲染为 ant-pro-card + ant-pro-table-search */
+.ant-pro-card.ant-pro-table-search {
+  .panel-surface();
+  margin-block-end: 16px;
+}
+
+/* 表格区外层 Card（排除查询区自身） */
+.ant-pro-table > .ant-pro-card:not(.ant-pro-table-search) {
+  .panel-surface();
+}
+
+/* 欢迎页等独立 Card、统计卡 */
+.ant-pro-page-container-children-container > .ant-card,
+.ant-pro-page-container-children-container > .ant-pro-card:not(.ant-pro-table-search) {
+  .panel-surface();
+}
+
+.ant-pro-page-container-children-container .ant-statistic-card {
+  .panel-surface();
+}
+
+
+/* 左侧选中菜单：叶子项主题色底+白字；一级（有二级）仅图标/文字用主题色，无选中底 */
+.ant-pro-sider {
+  .ant-menu-item-selected {
+    background-color: var(--ant-color-primary) !important;
+    color: #fff !important;
+
+    .anticon,
+    .ant-menu-item-icon,
+    .ant-menu-title-content,
+    a {
+      color: #fff !important;
+    }
+  }
+
+  /* 二级选中时：一级标题透明底，图标与文字用主题色 */
+  .ant-menu-submenu-selected > .ant-menu-submenu-title {
+    background-color: transparent !important;
+    color: var(--ant-color-primary) !important;
+
+    .anticon,
+    .ant-menu-item-icon,
+    .ant-menu-title-content,
+    .ant-menu-submenu-arrow,
+    a {
+      color: var(--ant-color-primary) !important;
+    }
+  }
+}
