@@ -36,7 +36,7 @@ const getSafeRedirectUrl = (redirect: string | null): string => {
   try {
     const parsed = new URL(redirect, window.location.origin);
     if (parsed.origin !== window.location.origin) return '/welcome';
-    const path = stripPublicPath(parsed.pathname);
+    let path = stripPublicPath(parsed.pathname).replace(/\/+$/, '') || '/';
     if (path === '/' || path === '/user/login') return '/welcome';
     return `${path}${parsed.search}${parsed.hash}`;
   } catch {

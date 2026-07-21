@@ -23,7 +23,7 @@ import {
   createDemoApiAdapter,
   useClientDemoMock,
 } from '@/utils/clientApiMock';
-import { withPublicPath } from '@/utils/publicPath';
+import { withPublicPath, stripPublicPath } from '@/utils/publicPath';
 import defaultSettings from '../config/defaultSettings';
 import { errorConfig } from './requestErrorConfig';
 
@@ -50,8 +50,9 @@ export async function getInitialState(): Promise<{
       // 已在登录页时不要再次 replace，避免登录成功后被踢回
       const { pathname, search, hash } = history.location;
       if (pathname !== loginPath) {
+        const safePath = stripPublicPath(pathname);
         history.replace(
-          `${loginPath}?redirect=${encodeURIComponent(pathname + search + hash)}`,
+          `${loginPath}?redirect=${encodeURIComponent(safePath + search + hash)}`,
         );
       }
     }
@@ -120,8 +121,9 @@ export const layout: RunTimeLayoutConfig = ({
       const { location } = history;
       // 如果没有登录，重定向到 login
       if (!initialState?.currentUser && location.pathname !== loginPath) {
+        const safePath = stripPublicPath(location.pathname);
         history.replace(
-          `${loginPath}?redirect=${encodeURIComponent(location.pathname + location.search + location.hash)}`,
+          `${loginPath}?redirect=${encodeURIComponent(safePath + location.search + location.hash)}`,
         );
       }
     },
