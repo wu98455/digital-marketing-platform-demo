@@ -45,6 +45,8 @@ export default defineConfig({
    * @doc https://umijs.org/docs/api/config#hash
    */
   hash: true,
+  // GitHub Pages 构建时避免 esbuild helpers 跨 chunk 冲突
+  esbuildMinifyIIFE: true,
 
   base: BASE_PATH,
   publicPath: PUBLIC_PATH,
