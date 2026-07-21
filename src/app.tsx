@@ -19,6 +19,10 @@ import {
   OfflineBanner,
 } from '@/components';
 import { currentUser as queryCurrentUser } from '@/services/ant-design-pro/api';
+import {
+  createDemoApiAdapter,
+  useClientDemoMock,
+} from '@/utils/clientApiMock';
 import { withPublicPath } from '@/utils/publicPath';
 import defaultSettings from '../config/defaultSettings';
 import { errorConfig } from './requestErrorConfig';
@@ -212,10 +216,17 @@ export const layout: RunTimeLayoutConfig = ({
  * @name request 配置，可以配置错误处理
  * 它基于 axios 提供了一套统一的网络请求和错误处理方案。
  * @doc https://umijs.org/docs/max/request#配置
+ *
+ * GitHub Pages 静态部署无后端：生产环境用 client adapter 返回演示数据。
  */
 export const request: RequestConfig = {
   baseURL: '',
   ...errorConfig,
+  ...(useClientDemoMock
+    ? {
+        adapter: createDemoApiAdapter(),
+      }
+    : {}),
 };
 
 export function rootContainer(container: React.ReactNode) {

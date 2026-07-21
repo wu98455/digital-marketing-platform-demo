@@ -11,7 +11,7 @@ const Exception404: React.FC = () => {
         title="404"
         subTitle={intl.formatMessage({ id: 'pages.404.subTitle' })}
         extra={
-          <Link to="/" prefetch>
+          <Link to="/welcome" prefetch>
             <Button type="primary">
               {intl.formatMessage({ id: 'pages.404.buttonText' })}
             </Button>

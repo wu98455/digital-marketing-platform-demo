@@ -20,24 +20,27 @@ import { flushSync } from 'react-dom';
 import { Footer } from '@/components';
 import { login } from '@/services/ant-design-pro/api';
 import { getFakeCaptcha } from '@/services/ant-design-pro/login';
-import { withPublicPath } from '@/utils/publicPath';
+import { stripPublicPath, withPublicPath } from '@/utils/publicPath';
 import Settings from '../../../../config/defaultSettings';
 
 /**
  * Validate redirect URL to prevent open redirect attacks.
  * Only allow same-origin relative paths starting with '/'.
+ * GitHub Pages 子路径下会去掉 PUBLIC_PATH 前缀，避免 history.push 重复 base 导致 404。
  */
 const getSafeRedirectUrl = (redirect: string | null): string => {
-  if (!redirect?.startsWith('/')) return '/';
+  if (!redirect?.startsWith('/')) return '/welcome';
 
-  if (redirect.startsWith('//')) return '/';
+  if (redirect.startsWith('//')) return '/welcome';
 
   try {
     const parsed = new URL(redirect, window.location.origin);
-    if (parsed.origin !== window.location.origin) return '/';
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (parsed.origin !== window.location.origin) return '/welcome';
+    const path = stripPublicPath(parsed.pathname);
+    if (path === '/' || path === '/user/login') return '/welcome';
+    return `${path}${parsed.search}${parsed.hash}`;
   } catch {
-    return '/';
+    return '/welcome';
   }
 };
 

@@ -8,6 +8,7 @@ import type { MenuProps } from 'antd';
 import { Spin } from 'antd';
 import React, { startTransition } from 'react';
 import { outLogin } from '@/services/ant-design-pro/api';
+import { stripPublicPath } from '@/utils/publicPath';
 import HeaderDropdown from '../HeaderDropdown';
 
 type GlobalHeaderRightProps = {
@@ -41,13 +42,14 @@ const loginOut = async () => {
   } catch {
     // Local logout has already cleared user state; redirect should still proceed.
   }
-  const { search, pathname } = window.location;
+  const { search, pathname: windowPath } = window.location;
+  const pathname = stripPublicPath(windowPath);
   const urlParams = new URL(window.location.href).searchParams;
   const searchParams = new URLSearchParams({
     redirect: pathname + search,
   });
   const redirect = urlParams.get('redirect');
-  if (window.location.pathname !== '/user/login' && !redirect) {
+  if (pathname !== '/user/login' && !redirect) {
     history.replace({
       pathname: '/user/login',
       search: searchParams.toString(),
