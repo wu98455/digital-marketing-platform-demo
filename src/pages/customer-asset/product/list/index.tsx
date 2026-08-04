@@ -1,7 +1,15 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { PageContainer, ProCard, ProTable, StatisticCard } from '@ant-design/pro-components';
+import {
+  ModalForm,
+  PageContainer,
+  ProCard,
+  ProFormSelect,
+  ProFormText,
+  ProTable,
+  StatisticCard,
+} from '@ant-design/pro-components';
 import { request } from '@umijs/max';
-import { message } from 'antd';
+import { Button, message } from 'antd';
 import React, { useEffect, useRef, useState } from 'react';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
 
@@ -18,6 +26,14 @@ type ProductItem = {
   tagValues: string;
 };
 
+const PRODUCT_TAG_OPTIONS = [
+  { label: '热销', value: '热销' },
+  { label: '推荐', value: '推荐' },
+  { label: '季节限定', value: '季节限定' },
+  { label: '亲子', value: '亲子' },
+  { label: '高端', value: '高端' },
+];
+
 const ProductListPage: React.FC = () => {
   const actionRef = useRef<ActionType | null>(null);
   const [summary, setSummary] = useState({
@@ -26,12 +42,29 @@ const ProductListPage: React.FC = () => {
     productTotal: 0,
     skuTotal: 0,
   });
+  const [selectedRows, setSelectedRows] = useState<ProductItem[]>([]);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [singleOpen, setSingleOpen] = useState(false);
+  const [currentRow, setCurrentRow] = useState<ProductItem>();
+  /** 演示：本地覆盖标签值，刷新表格后仍保留本次会话改动 */
+  const [tagOverrides, setTagOverrides] = useState<Record<string, string>>({});
 
   useEffect(() => {
     request('/api/customer-asset/products/summary').then((res) => {
       if (res?.data) setSummary(res.data);
     });
   }, []);
+
+  const applyTags = (ids: string[], tags: string[]) => {
+    const value = tags.filter(Boolean).join(',') || '--';
+    setTagOverrides((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => {
+        next[id] = value;
+      });
+      return next;
+    });
+  };
 
   const columns: ProColumns<ProductItem>[] = [
     {
@@ -111,13 +144,28 @@ const ProductListPage: React.FC = () => {
     },
     { title: '类目', dataIndex: 'category', search: false },
     { title: '价格', dataIndex: 'price', search: false },
-    { title: '标签值', dataIndex: 'tagValues', search: false },
+    {
+      title: '标签值',
+      dataIndex: 'tagValues',
+      search: false,
+      render: (_, row) => tagOverrides[row.id] ?? row.tagValues,
+    },
     { title: '同步时间', dataIndex: 'syncedAt', search: false },
     {
       title: '操作',
       valueType: 'option',
       search: false,
-      render: () => [
+      width: 120,
+      render: (_, row) => [
+        <a
+          key="tag"
+          onClick={() => {
+            setCurrentRow(row);
+            setSingleOpen(true);
+          }}
+        >
+          打标
+        </a>,
         <a key="view" onClick={() => message.info('查看商品（演示）')}>
           查看
         </a>,
@@ -140,9 +188,81 @@ const ProductListPage: React.FC = () => {
         columns={columns}
         search={listSearchProps}
         pagination={listPagination}
-        rowSelection={{}}
+        rowSelection={{
+          onChange: (_, rows) => setSelectedRows(rows),
+        }}
+        toolBarRender={() => [
+          <Button
+            key="batch"
+            type="primary"
+            disabled={!selectedRows.length}
+            onClick={() => setBatchOpen(true)}
+          >
+            批量改标签值{selectedRows.length ? `（${selectedRows.length}）` : ''}
+          </Button>,
+        ]}
         request={async (params) => request('/api/customer-asset/products', { params })}
       />
+
+      <ModalForm
+        title={`批量改标签值 · 已选 ${selectedRows.length} 个商品`}
+        open={batchOpen}
+        onOpenChange={setBatchOpen}
+        modalProps={{ destroyOnHidden: true }}
+        onFinish={async (values) => {
+          const tags = (values.tags as string[]) || [];
+          applyTags(
+            selectedRows.map((r) => r.id),
+            tags,
+          );
+          message.success(`已为 ${selectedRows.length} 个商品更新标签（演示）`);
+          setSelectedRows([]);
+          actionRef.current?.reload();
+          return true;
+        }}
+      >
+        <ProFormSelect
+          name="tags"
+          label="标签值"
+          mode="multiple"
+          options={PRODUCT_TAG_OPTIONS}
+          rules={[{ required: true, message: '请选择至少一个标签' }]}
+          extra="将覆盖所选商品当前展示的标签值"
+        />
+      </ModalForm>
+
+      <ModalForm
+        title={`商品打标 · ${currentRow?.name || ''}`}
+        open={singleOpen}
+        onOpenChange={setSingleOpen}
+        modalProps={{ destroyOnHidden: true }}
+        initialValues={{
+          tags: (() => {
+            const raw = tagOverrides[currentRow?.id || ''] ?? currentRow?.tagValues ?? '';
+            return raw
+              .split(',')
+              .map((s) => s.trim())
+              .filter((s) => s && s !== '--');
+          })(),
+        }}
+        onFinish={async (values) => {
+          if (!currentRow) return false;
+          const tags = (values.tags as string[]) || [];
+          applyTags([currentRow.id], tags);
+          message.success(`已更新「${currentRow.name}」标签（演示）`);
+          actionRef.current?.reload();
+          return true;
+        }}
+      >
+        <ProFormText name="product" label="商品" initialValue={currentRow?.name} disabled />
+        <ProFormSelect
+          name="tags"
+          label="标签值"
+          mode="multiple"
+          options={PRODUCT_TAG_OPTIONS}
+          rules={[{ required: true, message: '请选择至少一个标签' }]}
+        />
+      </ModalForm>
     </PageContainer>
   );
 };

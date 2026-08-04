@@ -1,5 +1,5 @@
 /**
- * 数字营销平台 · 菜单：欢迎 + 客户资产 + 人群营销 + 事件营销（按 xlsx）
+ * 数字营销平台 · 菜单：欢迎 + 客户资产 + 人群营销（按 xlsx）
  */
 export default [
   {
@@ -196,47 +196,6 @@ export default [
         path: '/crowd-marketing/node-record',
         name: 'node-record',
         component: './crowd-marketing/node-record',
-      },
-    ],
-  },
-  {
-    path: '/event-marketing',
-    name: 'event-marketing',
-    icon: 'heart',
-    routes: [
-      {
-        path: '/event-marketing',
-        redirect: '/event-marketing/member-care/scenarios',
-      },
-      {
-        path: '/event-marketing/member-care',
-        name: 'member-care',
-        routes: [
-          {
-            path: '/event-marketing/member-care',
-            redirect: '/event-marketing/member-care/scenarios',
-          },
-          {
-            path: '/event-marketing/member-care/scenarios',
-            name: 'care-scenarios',
-            component: './event-marketing/member-care/scenarios',
-          },
-          {
-            path: '/event-marketing/member-care/plans',
-            name: 'care-plans',
-            component: './event-marketing/member-care/plans',
-          },
-          {
-            path: '/event-marketing/member-care/records',
-            name: 'care-records',
-            component: './event-marketing/member-care/records',
-          },
-          {
-            path: '/event-marketing/member-care/stats',
-            name: 'care-stats',
-            component: './event-marketing/member-care/stats',
-          },
-        ],
       },
     ],
   },

@@ -26,11 +26,5 @@ export default {
   'menu.crowd-marketing.activity-template.local-template.template-design': 'Template Detail',
   'menu.crowd-marketing.activity-template.cloud-template': 'Cloud Templates',
   'menu.crowd-marketing.node-record': 'Node Execution Logs',
-  'menu.event-marketing': 'Event Marketing',
-  'menu.event-marketing.member-care': 'Member Care',
-  'menu.event-marketing.member-care.care-scenarios': 'Scenarios',
-  'menu.event-marketing.member-care.care-plans': 'Plans',
-  'menu.event-marketing.member-care.care-records': 'Runtime Logs',
-  'menu.event-marketing.member-care.care-stats': 'Runtime Stats',
   'menu.account.logout': 'Logout',
 };

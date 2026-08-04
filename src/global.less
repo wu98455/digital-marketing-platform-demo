@@ -164,6 +164,30 @@ ol {
   .panel-surface();
 }
 
+/* 表格操作列：文字链接单行横排，避免窄列把汉字竖排折断 */
+.table-op-row {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+
+  > a {
+    white-space: nowrap;
+    word-break: keep-all;
+  }
+
+  > a.disabled {
+    color: rgba(0, 0, 0, 0.25);
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+}
+
+.ant-table-cell .table-op-row {
+  max-width: none;
+}
+
 
 /* 左侧选中菜单：叶子项主题色底+白字；一级（有二级）仅图标/文字用主题色，无选中底 */
 .ant-pro-sider {

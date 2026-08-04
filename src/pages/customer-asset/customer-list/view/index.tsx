@@ -1,6 +1,7 @@
 import { PageContainer, ProDescriptions, ProTable } from '@ant-design/pro-components';
 import { history, request, useParams } from '@umijs/max';
 import {
+  Button,
   Card,
   Col,
   Empty,
@@ -17,6 +18,9 @@ import {
 } from 'antd';
 import React, { useEffect, useState } from 'react';
 import { listSearchProps } from '@/utils/listSearch';
+import EditCustomerTagsModal, {
+  type TagGroup,
+} from '../components/EditCustomerTagsModal';
 
 const CustomerViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +30,7 @@ const CustomerViewPage: React.FC = () => {
   const [mainTab, setMainTab] = useState('portrait');
   const [portraitSub, setPortraitSub] = useState('rfm');
   const [rfmMode, setRfmMode] = useState('all');
+  const [tagEditOpen, setTagEditOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -34,6 +39,8 @@ const CustomerViewPage: React.FC = () => {
       .then((res) => setData(res.data))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const customTags: TagGroup[] = data?.customTags || [];
 
   return (
     <PageContainer
@@ -209,12 +216,18 @@ const CustomerViewPage: React.FC = () => {
                 )}
                 {portraitSub === 'custom' && (
                   <Row gutter={12}>
-                    {(data?.customTags || []).map((g: any) => (
+                    {(customTags.length
+                      ? customTags
+                      : [
+                          { group: '客户价值', tags: [] as string[] },
+                          { group: '兴趣偏好', tags: [] as string[] },
+                        ]
+                    ).map((g) => (
                       <Col span={12} key={g.group}>
                         <Card
                           size="small"
                           title={g.group}
-                          extra={<a>编辑</a>}
+                          extra={<a onClick={() => setTagEditOpen(true)}>编辑</a>}
                           style={{ marginBottom: 12 }}
                         >
                           {g.tags?.length ? (
@@ -228,6 +241,11 @@ const CustomerViewPage: React.FC = () => {
                         </Card>
                       </Col>
                     ))}
+                    <Col span={24}>
+                      <Button type="dashed" block onClick={() => setTagEditOpen(true)}>
+                        编辑全渠道客户标签
+                      </Button>
+                    </Col>
                   </Row>
                 )}
                 {portraitSub === 'wecom' && (
@@ -392,6 +410,15 @@ const CustomerViewPage: React.FC = () => {
           )}
         </Spin>
       </div>
+
+      <EditCustomerTagsModal
+        open={tagEditOpen}
+        onOpenChange={setTagEditOpen}
+        value={customTags}
+        onSave={(next) => {
+          setData((prev: any) => ({ ...prev, customTags: next }));
+        }}
+      />
     </PageContainer>
   );
 };

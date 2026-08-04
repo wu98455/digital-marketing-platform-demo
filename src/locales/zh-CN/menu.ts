@@ -26,11 +26,5 @@ export default {
   'menu.crowd-marketing.activity-template.local-template.template-design': '模板详情',
   'menu.crowd-marketing.activity-template.cloud-template': '云模板',
   'menu.crowd-marketing.node-record': '节点执行记录',
-  'menu.event-marketing': '事件营销',
-  'menu.event-marketing.member-care': '会员关怀',
-  'menu.event-marketing.member-care.care-scenarios': '营销场景',
-  'menu.event-marketing.member-care.care-plans': '营销计划',
-  'menu.event-marketing.member-care.care-records': '运行记录',
-  'menu.event-marketing.member-care.care-stats': '运行统计',
   'menu.account.logout': '退出登录',
 };
