@@ -100,6 +100,33 @@ export default {
       },
     });
   },
+  'GET /api/crowd-marketing/activities/:id/report': (req: Request, res: Response) => {
+    const item = activities.find((a) => a.id === req.params.id) || activities[0];
+    res.json({
+      success: true,
+      data: {
+        id: item.id,
+        name: item.name,
+        execStatus: item.status === '进行中' ? '执行中' : '执行完成',
+        startAt: '2026-07-20 10:00:00',
+        endAt: '2026-07-20 12:30:00',
+        summary: {
+          entered: 12840,
+          reachSuccess: 10211,
+          reachFail: 329,
+          benefitIssued: 860,
+        },
+        nodes: [
+          { id: '1', nodeName: '开始', nodeType: '开始', entered: 12840, success: 12840, failed: 0, duration: '1s' },
+          { id: '2', nodeName: '人群圈选', nodeType: '人群', entered: 12840, success: 12600, failed: 240, duration: '45s' },
+          { id: '3', nodeName: '行为触发', nodeType: '行为', entered: 4200, success: 4180, failed: 20, duration: '实时' },
+          { id: '4', nodeName: '小程序站内信', nodeType: '触达', entered: 4180, success: 3900, failed: 280, duration: '2m' },
+          { id: '5', nodeName: '发券', nodeType: '优惠', entered: 860, success: 860, failed: 0, duration: '30s' },
+          { id: '6', nodeName: '结束', nodeType: '结束', entered: 12600, success: 12600, failed: 0, duration: '1s' },
+        ],
+      },
+    });
+  },
   'GET /api/crowd-marketing/templates/local': (req: Request, res: Response) => {
     const { current = 1, pageSize = 10, catalog, keyword, onlyMine } = req.query as Record<
       string,

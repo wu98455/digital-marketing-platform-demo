@@ -36,6 +36,7 @@ const stores = [
     type: '普通单店',
     area: '重庆市渝中区',
     attr: '线上',
+    operateType: '自营',
   },
   {
     id: 's2',
@@ -43,6 +44,7 @@ const stores = [
     storeId: '10002',
     platform: '国企优品',
     type: '普通单店',
+    operateType: '自营',
     area: '重庆市江北区',
     attr: '线上',
   },
@@ -54,6 +56,7 @@ const stores = [
     type: '普通单店',
     area: '重庆市渝北区',
     attr: '线上',
+    operateType: '自营',
   },
   {
     id: 's4',
@@ -63,6 +66,7 @@ const stores = [
     type: '普通单店',
     area: '重庆市南岸区',
     attr: '线上',
+    operateType: '自营',
   },
   {
     id: 's5',
@@ -72,6 +76,55 @@ const stores = [
     type: '普通单店',
     area: '--',
     attr: '线下',
+    operateType: '三方',
+  },
+];
+
+const topicCampaigns = [
+  {
+    id: 'A1001',
+    name: '金刀峡暑期亲子专题',
+    type: '专题',
+    channel: '小程序',
+    startAt: '2026-07-01',
+    endAt: '2026-08-31',
+    status: '进行中',
+  },
+  {
+    id: 'A1002',
+    name: '国企优品会员日投放',
+    type: '渠道投放',
+    channel: '短信',
+    startAt: '2026-06-01',
+    endAt: '2026-06-30',
+    status: '已结束',
+  },
+  {
+    id: 'A1003',
+    name: '中秋景区联票节',
+    type: '节日',
+    channel: '小程序',
+    startAt: '2026-09-10',
+    endAt: '2026-09-18',
+    status: '未开始',
+  },
+  {
+    id: 'A1004',
+    name: '文创市集线下召回',
+    type: '专题',
+    channel: '线下',
+    startAt: '2026-05-01',
+    endAt: '2026-05-07',
+    status: '已结束',
+  },
+  {
+    id: 'A1005',
+    name: '沉默大会员站内信唤醒',
+    type: '渠道投放',
+    channel: '站内信',
+    startAt: '2026-07-15',
+    endAt: '2026-08-15',
+    status: '进行中',
   },
 ];
 
@@ -113,6 +166,34 @@ const crowds = [
     catalog: '文旅人群',
     canDelete: false,
     canCopy: false,
+  },
+  {
+    id: '241076',
+    name: '近7天浏览门票临时圈选',
+    count: 3260,
+    type: '临时人群',
+    creator: 'demo',
+    source: '规则计算',
+    createdAt: '2026-07-28 11:00:00',
+    updatedAt: '2026-07-28 11:05:00',
+    syncStatus: '未同步',
+    catalog: '文旅人群',
+    canDelete: true,
+    canCopy: true,
+  },
+  {
+    id: '241077',
+    name: '金刀峡购后关怀',
+    count: 890,
+    type: '条件人群',
+    creator: 'WangSiyi',
+    source: '人群工坊',
+    createdAt: '2026-06-18 09:20:00',
+    updatedAt: '2026-07-01 16:00:00',
+    syncStatus: '同步成功',
+    catalog: '业务目录',
+    canDelete: true,
+    canCopy: true,
   },
   {
     id: '237295',
@@ -179,12 +260,26 @@ const shopTags = Array.from({ length: 12 }).map((_, i) => ({
     (i > 5 ? `-${i}` : ''),
   type: ['手工标签', '规则标签'][i % 2],
   group: ['测试平台', '惠游重庆', '国企优品', '重庆文旅集团大会员'][i % 4],
+  operateType: ['自营', '三方'][i % 2],
+  syncStatus: ['未同步', '同步成功', '未同步'][i % 3],
   desc: ['消费偏好客群识别', '新客识别', '沉默客召回', '营销互动识别'][i % 4],
   valid: ['永久', '2026-12-31', '2027-06-30'][i % 3],
   perm: ['仅自己', '本部门', '全员'][i % 3],
   taggedCount: 100 + i * 37,
   creator: ['demo', 'WangSiyi', 'JiangYajuan'][i % 3],
   createdAt: `2026-0${(i % 6) + 1}-12 10:00:00`,
+}));
+
+const activityTags = Array.from({ length: 8 }).map((_, i) => ({
+  id: `at${200 + i}`,
+  name: ['金刀峡专题', '暑期游', '夜游重庆', '会员日', '新客礼', '渠道投放A'][i % 6] + (i > 5 ? `-${i}` : ''),
+  type: ['手工标签', '规则标签'][i % 2],
+  group: ['专题活动', '渠道投放', '节日营销'][i % 3],
+  object: '活动',
+  syncStatus: ['未同步', '同步成功'][i % 2],
+  taggedCount: 3 + i * 2,
+  creator: ['demo', 'WangSiyi'][i % 2],
+  createdAt: `2026-0${(i % 6) + 1}-08 10:00:00`,
 }));
 
 const omniTags = Array.from({ length: 10 }).map((_, i) => ({
@@ -384,6 +479,11 @@ const routes: RouteDef[] = [
   },
   {
     method: 'GET',
+    path: '/api/tag-center/campaigns',
+    handler: ({ params }) => pageSlice(topicCampaigns, params.current, params.pageSize),
+  },
+  {
+    method: 'GET',
     path: '/api/customer-asset/customers',
     handler: ({ params }) => {
       const { current = 1, pageSize = 20, customerId, phone, name } = params;
@@ -560,10 +660,14 @@ const routes: RouteDef[] = [
         creatorSearch,
         createdStart,
         createdEnd,
+        operateTypeSearch,
       } = params;
       let list = [...shopTags];
       if (group && group !== '全部') {
         list = list.filter((x) => x.group === group);
+      }
+      if (operateTypeSearch && operateTypeSearch !== '全部') {
+        list = list.filter((x) => x.operateType === operateTypeSearch);
       }
       if (tagId) {
         list = list.filter((x) => x.id.includes(String(tagId)));
@@ -682,6 +786,49 @@ const routes: RouteDef[] = [
           ],
         },
       };
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/crowd-marketing/activities/:id/report',
+    handler: ({ pathParams }) => {
+      const item = activities.find((a) => a.id === pathParams.id) || activities[0];
+      return {
+        success: true,
+        data: {
+          id: item.id,
+          name: item.name,
+          execStatus: item.status === '进行中' ? '执行中' : '执行完成',
+          startAt: '2026-07-20 10:00:00',
+          endAt: '2026-07-20 12:30:00',
+          summary: {
+            entered: 12840,
+            reachSuccess: 10211,
+            reachFail: 329,
+            benefitIssued: 860,
+          },
+          nodes: [
+            { id: '1', nodeName: '开始', nodeType: '开始', entered: 12840, success: 12840, failed: 0, duration: '1s' },
+            { id: '2', nodeName: '人群圈选', nodeType: '人群', entered: 12840, success: 12600, failed: 240, duration: '45s' },
+            { id: '3', nodeName: '行为触发', nodeType: '行为', entered: 4200, success: 4180, failed: 20, duration: '实时' },
+            { id: '4', nodeName: '小程序站内信', nodeType: '触达', entered: 4180, success: 3900, failed: 280, duration: '2m' },
+            { id: '5', nodeName: '发券', nodeType: '优惠', entered: 860, success: 860, failed: 0, duration: '30s' },
+            { id: '6', nodeName: '结束', nodeType: '结束', entered: 12600, success: 12600, failed: 0, duration: '1s' },
+          ],
+        },
+      };
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/customer-asset/tags/activity',
+    handler: ({ params }) => {
+      const { current = 1, pageSize = 10, group, keyword, syncSearch } = params;
+      let list = [...activityTags];
+      if (group && group !== '全部') list = list.filter((x) => x.group === group);
+      if (keyword) list = list.filter((x) => x.name.includes(String(keyword)) || x.id.includes(String(keyword)));
+      if (syncSearch && syncSearch !== '全部') list = list.filter((x) => x.syncStatus === syncSearch);
+      return pageSlice(list, current, pageSize);
     },
   },
   {

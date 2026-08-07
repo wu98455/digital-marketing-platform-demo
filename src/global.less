@@ -191,6 +191,66 @@ ol {
 
 /* 左侧选中菜单：叶子项主题色底+白字；一级（有二级）仅图标/文字用主题色，无选中底 */
 .ant-pro-sider {
+  /* 隐藏式滚动条：默认几乎看不见，悬停菜单区时淡淡出现 */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+
+  &:hover {
+    scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+  }
+
+  &::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 4px;
+  }
+
+  &:hover::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+  }
+
+  .ant-layout-sider-children,
+  .ant-pro-sider-menu,
+  .ant-pro-base-menu,
+  .ant-menu {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+
+    &:hover {
+      scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+    }
+
+    &::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: transparent;
+      border-radius: 4px;
+    }
+
+    &:hover::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.1);
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.18);
+    }
+  }
+
   .ant-menu-item-selected {
     background-color: var(--ant-color-primary) !important;
     color: #fff !important;

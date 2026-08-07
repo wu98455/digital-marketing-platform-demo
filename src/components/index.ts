@@ -20,3 +20,4 @@ export { default as StandardFormRow } from './StandardFormRow';
 export { default as TagSelect } from './TagSelect';
 
 export { AvatarDropdown, DocLink, Footer, LangDropdown, VersionDropdown };
+export * from './Tagging';

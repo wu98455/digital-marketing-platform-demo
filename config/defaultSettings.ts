@@ -9,6 +9,7 @@ const Settings: ProLayoutProps & {
   navTheme: 'light',
   colorPrimary: '#1677ff',
   layout: 'side',
+  siderMenuType: 'sub',
   contentWidth: 'Fluid',
   fixedHeader: false,
   fixSiderbar: true,

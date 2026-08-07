@@ -1,5 +1,5 @@
 import { PageContainer, ProDescriptions, ProTable } from '@ant-design/pro-components';
-import { history, request, useParams } from '@umijs/max';
+import { history, request, useLocation, useParams } from '@umijs/max';
 import {
   Button,
   Card,
@@ -17,6 +17,7 @@ import {
   message,
 } from 'antd';
 import React, { useEffect, useState } from 'react';
+import { TagChips, flattenGroups, useTagCatalog } from '@/components/Tagging';
 import { listSearchProps } from '@/utils/listSearch';
 import EditCustomerTagsModal, {
   type TagGroup,
@@ -24,13 +25,20 @@ import EditCustomerTagsModal, {
 
 const CustomerViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
+  const { getCatalog } = useTagCatalog();
+  const catalog = getCatalog('customer');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>();
   const [infoTab, setInfoTab] = useState('latest');
   const [mainTab, setMainTab] = useState('portrait');
-  const [portraitSub, setPortraitSub] = useState('rfm');
+  const [portraitSub, setPortraitSub] = useState('custom');
   const [rfmMode, setRfmMode] = useState('all');
   const [tagEditOpen, setTagEditOpen] = useState(false);
+
+  const backPath = location.pathname.startsWith('/tag-center')
+    ? '/tag-center/customer'
+    : '/customer-asset/customer-list';
 
   useEffect(() => {
     if (!id) return;
@@ -41,15 +49,13 @@ const CustomerViewPage: React.FC = () => {
   }, [id]);
 
   const customTags: TagGroup[] = data?.customTags || [];
+  const headerChips = flattenGroups(customTags);
 
   return (
-    <PageContainer
-      title={false}
-      onBack={() => history.push('/customer-asset/customer-list')}
-    >
+    <PageContainer title={false} onBack={() => history.push(backPath)}>
       <div className="panel-surface" style={{ padding: 24 }}>
         <Spin spinning={loading}>
-          <Space style={{ marginBottom: 16 }} wrap>
+          <Space style={{ marginBottom: 12 }} wrap align="start">
             <Typography.Title level={5} style={{ margin: 0 }}>
               客户视图
             </Typography.Title>
@@ -59,6 +65,23 @@ const CustomerViewPage: React.FC = () => {
               {data?.customerIdFull || '--'}
             </Typography.Text>
           </Space>
+          <div style={{ marginBottom: 16 }}>
+            <Space align="center" wrap>
+              <Typography.Text type="secondary">已打标签</Typography.Text>
+              <TagChips
+                tags={headerChips}
+                catalog={catalog}
+                onClick={() => {
+                  setMainTab('portrait');
+                  setPortraitSub('custom');
+                  setTagEditOpen(true);
+                }}
+              />
+              <Button type="link" size="small" onClick={() => setTagEditOpen(true)}>
+                编辑标签
+              </Button>
+            </Space>
+          </div>
 
           <Tabs
             activeKey={infoTab}

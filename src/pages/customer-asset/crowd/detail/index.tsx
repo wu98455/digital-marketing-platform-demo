@@ -27,7 +27,7 @@ const CrowdDetail: React.FC = () => {
     <PageContainer
       loading={loading}
       title={false}
-      onBack={() => history.push('/customer-asset/crowd/custom')}
+      onBack={() => history.push('/crowd')}
       extra={[
         <Button key="edit" onClick={() => message.info('编辑（演示）')}>
           编辑

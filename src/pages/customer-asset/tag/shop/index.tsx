@@ -25,6 +25,7 @@ type TagItem = {
   taggedCount: number;
   creator: string;
   createdAt: string;
+  operateType?: string;
 };
 
 type ImportBatchItem = {
@@ -84,6 +85,17 @@ const ShopTagPage: React.FC = () => {
         规则标签: { text: '规则标签' },
       },
     },
+    {
+      title: '经营类型',
+      dataIndex: 'operateTypeSearch',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: {
+        全部: { text: '全部' },
+        自营: { text: '自营' },
+        三方: { text: '三方' },
+      },
+    },
     { title: '创建人', dataIndex: 'creatorSearch', hideInTable: true },
     {
       title: '创建时间',
@@ -98,6 +110,13 @@ const ShopTagPage: React.FC = () => {
     { title: '标签名称', dataIndex: 'name', search: false },
     { title: '类型', dataIndex: 'type', search: false, width: 100 },
     { title: '分组', dataIndex: 'group', search: false, width: 120 },
+    {
+      title: '经营类型',
+      dataIndex: 'operateType',
+      search: false,
+      width: 100,
+      render: (_, row) => row.operateType || '自营',
+    },
     { title: '已打标人数', dataIndex: 'taggedCount', search: false, width: 110 },
     { title: '创建人', dataIndex: 'creator', search: false, width: 110 },
     { title: '创建时间', dataIndex: 'createdAt', search: false, width: 170 },

@@ -155,7 +155,7 @@ export default defineConfig({
   antd: {
     appConfig: {},
     configProvider: {
-      variant: 'filled',
+      variant: 'outlined',
       /** 全局 Pagination：可切换每页条数；跳至/大尺寸见 @/utils/listSearch listPagination */
       pagination: {
         showSizeChanger: true,

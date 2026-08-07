@@ -167,7 +167,7 @@ const ActivityList: React.FC = () => {
           >
             编辑
           </a>
-          <a onClick={() => message.info('活动数据（演示）')}>数据</a>
+          <a onClick={() => history.push(`/crowd-marketing/activity/report/${row.id}`)}>数据</a>
           <a
             className={row.canDelete === false ? 'disabled' : undefined}
             onClick={() => {

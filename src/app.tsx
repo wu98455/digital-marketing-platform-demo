@@ -18,8 +18,8 @@ import {
   LangDropdown,
   OfflineBanner,
 } from '@/components';
-import { currentUser as queryCurrentUser } from '@/services/ant-design-pro/api';
-import {
+import { TagCatalogProvider } from '@/components/Tagging';
+import { currentUser as queryCurrentUser } from '@/services/ant-design-pro/api';import {
   createDemoApiAdapter,
   useClientDemoMock,
 } from '@/utils/clientApiMock';
@@ -235,7 +235,9 @@ export function rootContainer(container: React.ReactNode) {
   return (
     <>
       <OfflineBanner />
-      <ErrorBoundary>{container}</ErrorBoundary>
+      <ErrorBoundary>
+        <TagCatalogProvider>{container}</TagCatalogProvider>
+      </ErrorBoundary>
     </>
   );
 }
