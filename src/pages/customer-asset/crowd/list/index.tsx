@@ -191,8 +191,8 @@ const CrowdList: React.FC = () => {
         message={
           <span>
             还没有合适的标签？
-            <a onClick={() => history.push('/tag-center/customer')} style={{ marginLeft: 4 }}>
-              先去数据打标
+            <a onClick={() => history.push('/tag-center/list')} style={{ marginLeft: 4 }}>
+              先去人群标签
             </a>
             ，再回来新建目标人群。
           </span>

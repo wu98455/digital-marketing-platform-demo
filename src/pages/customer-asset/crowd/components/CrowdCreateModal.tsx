@@ -4,10 +4,10 @@ import {
   Form,
   Input,
   Modal,
-  Segmented,
   Select,
   Space,
   Steps,
+  Table,
   Tag,
   Typography,
   message,
@@ -21,31 +21,70 @@ import {
   type TagItem,
 } from '@/components/Tagging';
 
-export type CrowdConditionTag = TagItem & { source: CatalogKind };
+export type CrowdTagScope = 'crowd' | CatalogKind;
+
+export type CrowdConditionTag = TagItem & { scope: CrowdTagScope };
+
+type CrowdMember = {
+  id: string;
+  memberId: string;
+  name: string;
+  phoneMasked: string;
+  source: string;
+};
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** 复制时预填名称等 */
   initialName?: string;
   onSuccess?: () => void;
 };
 
-const SOURCE_OPTIONS: { label: string; value: CatalogKind }[] = [
-  { label: '客户', value: 'customer' },
-  { label: '店铺', value: 'store' },
-  { label: '商品', value: 'product' },
-  { label: '专题活动', value: 'campaign' },
+const TAG_SECTIONS: { scope: CrowdTagScope; label: string; catalog: CatalogKind }[] = [
+  { scope: 'crowd', label: '人群标签', catalog: 'customer' },
+  { scope: 'customer', label: '客户', catalog: 'customer' },
+  { scope: 'store', label: '店铺', catalog: 'store' },
+  { scope: 'product', label: '商品', catalog: 'product' },
+  { scope: 'campaign', label: '专题活动', catalog: 'campaign' },
 ];
 
-const SOURCE_LABEL: Record<CatalogKind, string> = {
-  customer: '客户',
-  store: '店铺',
-  product: '商品',
-  campaign: '专题活动',
+const conditionKey = (c: CrowdConditionTag) => `${c.scope}::${tagKey(c)}`;
+
+const formatTagSource = (c: CrowdConditionTag) => {
+  const label = TAG_SECTIONS.find((s) => s.scope === c.scope)?.label || '';
+  return `${label} · ${c.group}/${c.tag}`;
 };
 
-const conditionKey = (c: CrowdConditionTag) => `${c.source}::${tagKey(c)}`;
+const catalogForScope = (scope: CrowdTagScope) =>
+  TAG_SECTIONS.find((s) => s.scope === scope)?.catalog || 'customer';
+
+function filterCatalog(catalog: ReturnType<ReturnType<typeof useTagCatalog>['getCatalog']>, keyword: string) {
+  const k = keyword.trim();
+  if (!k) return catalog;
+  return catalog
+    .map((g) => ({
+      group: g.group,
+      tags: g.tags.filter((t) => g.group.includes(k) || t.includes(k)),
+    }))
+    .filter((g) => g.tags.length > 0);
+}
+
+function downloadCsv(filename: string, rows: CrowdMember[]) {
+  const header = ['会员ID', '姓名', '手机', '来源'];
+  const lines = [
+    header.join(','),
+    ...rows.map((r) =>
+      [r.memberId, r.name, r.phoneMasked, `"${(r.source || '').replace(/"/g, '""')}"`].join(','),
+    ),
+  ];
+  const blob = new Blob([`\ufeff${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const CrowdCreateModal: React.FC<Props> = ({
   open,
@@ -58,13 +97,13 @@ const CrowdCreateModal: React.FC<Props> = ({
   const [name, setName] = useState('');
   const [persistType, setPersistType] = useState('正式人群');
   const [conditions, setConditions] = useState<CrowdConditionTag[]>([]);
-  const [source, setSource] = useState<CatalogKind>('customer');
   const [keyword, setKeyword] = useState('');
   const [timeNode, setTimeNode] = useState<string>();
   const [events, setEvents] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string[]>([]);
   const [behaviors, setBehaviors] = useState<string[]>([]);
   const [estimate, setEstimate] = useState<number>();
+  const [members, setMembers] = useState<CrowdMember[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -72,34 +111,29 @@ const CrowdCreateModal: React.FC<Props> = ({
     setName(initialName || '');
     setPersistType('正式人群');
     setConditions([]);
-    setSource('customer');
     setKeyword('');
     setTimeNode(undefined);
     setEvents([]);
     setFeedback([]);
     setBehaviors([]);
     setEstimate(undefined);
+    setMembers([]);
   }, [open, initialName]);
 
-  const catalog = getCatalog(source);
-  const selectedKeys = useMemo(
-    () => new Set(conditions.filter((c) => c.source === source).map((c) => tagKey(c))),
-    [conditions, source],
+  const sectionCatalogs = useMemo(
+    () =>
+      TAG_SECTIONS.map((section) => ({
+        ...section,
+        catalog: filterCatalog(getCatalog(section.catalog), keyword),
+      })).filter((section) => section.catalog.length > 0 || !keyword.trim()),
+    [getCatalog, keyword],
   );
 
-  const filteredCatalog = useMemo(() => {
-    const k = keyword.trim();
-    if (!k) return catalog;
-    return catalog
-      .map((g) => ({
-        group: g.group,
-        tags: g.tags.filter((t) => g.group.includes(k) || t.includes(k)),
-      }))
-      .filter((g) => g.tags.length > 0);
-  }, [catalog, keyword]);
+  const isSelected = (scope: CrowdTagScope, item: TagItem) =>
+    conditions.some((c) => c.scope === scope && tagKey(c) === tagKey(item));
 
-  const toggleCondition = (item: TagItem) => {
-    const full: CrowdConditionTag = { ...item, source };
+  const toggleCondition = (scope: CrowdTagScope, item: TagItem) => {
+    const full: CrowdConditionTag = { ...item, scope };
     const key = conditionKey(full);
     setConditions((prev) => {
       if (prev.some((c) => conditionKey(c) === key)) {
@@ -111,6 +145,22 @@ const CrowdCreateModal: React.FC<Props> = ({
 
   const removeCondition = (c: CrowdConditionTag) => {
     setConditions((prev) => prev.filter((x) => conditionKey(x) !== conditionKey(c)));
+  };
+
+  const buildMembers = (count: number) => {
+    const names = ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十'];
+    const sourceLabel =
+      conditions.length > 0
+        ? conditions.map((c) => formatTagSource(c)).join('；')
+        : '未选标签';
+    const n = Math.min(8, Math.max(3, Math.floor(count / 200)));
+    return Array.from({ length: n }, (_, i) => ({
+      id: `cm${i + 1}`,
+      memberId: `M${20000 + i}`,
+      name: names[i % names.length],
+      phoneMasked: `139****${String(2000 + i).slice(-4)}`,
+      source: sourceLabel,
+    }));
   };
 
   const goNext = () => {
@@ -139,7 +189,7 @@ const CrowdCreateModal: React.FC<Props> = ({
       title="新建目标人群"
       open={open}
       onCancel={() => onOpenChange(false)}
-      width={800}
+      width={880}
       destroyOnHidden
       footer={
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
@@ -182,10 +232,7 @@ const CrowdCreateModal: React.FC<Props> = ({
               maxLength={40}
             />
           </Form.Item>
-          <Form.Item
-            label="存放类型"
-            extra="临时人群对应规则计算后短期存放。"
-          >
+          <Form.Item label="存放类型" extra="临时人群对应规则计算后短期存放。">
             <Select
               value={persistType}
               onChange={setPersistType}
@@ -214,79 +261,82 @@ const CrowdCreateModal: React.FC<Props> = ({
               已选条件
             </Typography.Text>
             {conditions.length === 0 ? (
-              <Typography.Text type="secondary">
-                还没选条件，切换下方类型后点色块即可
-              </Typography.Text>
+              <Typography.Text type="secondary">还没选条件，按分类点选下方标签</Typography.Text>
             ) : (
               <Space size={[4, 4]} wrap>
                 {conditions.map((c) => (
                   <Tag
                     key={conditionKey(c)}
                     closable
-                    color={colorForGroup(c.group, getCatalog(c.source))}
+                    color={colorForGroup(c.group, getCatalog(catalogForScope(c.scope)))}
                     onClose={(e) => {
                       e.preventDefault();
                       removeCondition(c);
                     }}
                   >
-                    {SOURCE_LABEL[c.source]}/{c.tag}
+                    {formatTagSource(c)}
                   </Tag>
                 ))}
               </Space>
             )}
           </div>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-            同类标签为且；不同类之间为且（演示）。允许某类不选。
+            按数据打标维度选标签（人群标签 / 客户 / 店铺 / 商品 / 专题活动）；多个标签之间为「且」（演示）。
           </Typography.Paragraph>
-          <Segmented
-            block
-            options={SOURCE_OPTIONS}
-            value={source}
-            onChange={(v) => {
-              setSource(v as CatalogKind);
-              setKeyword('');
-            }}
-            style={{ marginBottom: 12 }}
-          />
           <Input.Search
             allowClear
-            placeholder={`搜索${SOURCE_LABEL[source]}标签`}
+            placeholder="搜索分类或标签"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             style={{ marginBottom: 12 }}
           />
-          <div style={{ maxHeight: 320, overflow: 'auto' }}>
-            {filteredCatalog.map((g) => (
-              <div key={g.group} style={{ marginBottom: 14 }}>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>{g.group}</div>
-                <Space wrap size={[8, 8]}>
-                  {g.tags.map((tag) => {
-                    const item = { group: g.group, tag };
-                    const active = selectedKeys.has(tagKey(item));
-                    return (
-                      <button
-                        key={tagKey(item)}
-                        type="button"
-                        onClick={() => toggleCondition(item)}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '6px 12px',
-                          borderRadius: 6,
-                          border: active ? '1px solid transparent' : '1px solid #d9d9d9',
-                          background: active ? '#1677ff' : '#fff',
-                          color: active ? '#fff' : 'rgba(0,0,0,0.88)',
-                          cursor: 'pointer',
-                          fontSize: 13,
-                        }}
-                      >
-                        {active ? <CheckOutlined /> : null}
-                        {tag}
-                      </button>
-                    );
-                  })}
-                </Space>
+          <div style={{ maxHeight: 360, overflow: 'auto' }}>
+            {sectionCatalogs.map((section) => (
+              <div key={section.scope} style={{ marginBottom: 20 }}>
+                <Typography.Text strong style={{ display: 'block', marginBottom: 10 }}>
+                  {section.label}
+                </Typography.Text>
+                {section.catalog.length === 0 ? (
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    无匹配标签
+                  </Typography.Text>
+                ) : (
+                  section.catalog.map((g) => (
+                    <div key={`${section.scope}-${g.group}`} style={{ marginBottom: 12 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 8, color: 'rgba(0,0,0,0.65)' }}>
+                        {g.group}
+                      </div>
+                      <Space wrap size={[8, 8]}>
+                        {g.tags.map((tag) => {
+                          const item = { group: g.group, tag };
+                          const active = isSelected(section.scope, item);
+                          return (
+                            <button
+                              key={`${section.scope}-${tagKey(item)}`}
+                              type="button"
+                              onClick={() => toggleCondition(section.scope, item)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '6px 12px',
+                                borderRadius: 6,
+                                border: active ? '1px solid transparent' : '1px solid #d9d9d9',
+                                background: active ? '#1677ff' : '#fff',
+                                color: active ? '#fff' : 'rgba(0,0,0,0.88)',
+                                cursor: 'pointer',
+                                fontSize: 13,
+                              }}
+                            >
+                              {active ? <CheckOutlined /> : null}
+                              {tag}
+                            </button>
+                          );
+                        })}
+                      </Space>
+                    </div>
+                  ))
+                )}
               </div>
             ))}
           </div>
@@ -352,11 +402,12 @@ const CrowdCreateModal: React.FC<Props> = ({
               placeholder="可选"
             />
           </Form.Item>
-          <Space>
+          <Space wrap style={{ marginBottom: 12 }}>
             <Button
               onClick={() => {
                 const base = 800 + conditions.length * 420 + Math.floor(Math.random() * 3000);
                 setEstimate(base);
+                setMembers(buildMembers(base));
                 message.success('已估算人数');
               }}
             >
@@ -367,21 +418,42 @@ const CrowdCreateModal: React.FC<Props> = ({
                 估算约 <Typography.Text strong>{estimate.toLocaleString()}</Typography.Text> 人
               </Typography.Text>
             )}
+            <Button
+              disabled={!members.length}
+              onClick={() => downloadCsv(`${name || '目标人群'}-预览.csv`, members)}
+            >
+              导出
+            </Button>
           </Space>
           {conditions.length > 0 && (
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginBottom: 12 }}>
               <Typography.Text type="secondary">当前标签条件：</Typography.Text>
               <div style={{ marginTop: 8 }}>
                 <Space wrap size={[4, 4]}>
                   {conditions.map((c) => (
-                    <Tag key={conditionKey(c)}>
-                      {SOURCE_LABEL[c.source]}/{c.tag}
-                    </Tag>
+                    <Tag key={conditionKey(c)}>{formatTagSource(c)}</Tag>
                   ))}
                 </Space>
               </div>
             </div>
           )}
+          <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+            命中人预览
+          </Typography.Text>
+          <Table
+            size="small"
+            pagination={false}
+            rowKey="id"
+            dataSource={members}
+            columns={[
+              { title: '会员ID', dataIndex: 'memberId', width: 110 },
+              { title: '姓名', dataIndex: 'name', width: 90 },
+              { title: '手机', dataIndex: 'phoneMasked', width: 120 },
+              { title: '来源', dataIndex: 'source', ellipsis: true },
+            ]}
+            locale={{ emptyText: '请先点「估算人数」' }}
+            scroll={{ y: 220 }}
+          />
         </Form>
       )}
     </Modal>

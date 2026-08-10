@@ -21,6 +21,8 @@ type Ctx = {
   catalogs: Record<CatalogKind, TagGroup[]>;
   getCatalog: (kind: CatalogKind) => TagGroup[];
   addGroup: (kind: CatalogKind, group: string) => string | null;
+  renameGroup: (kind: CatalogKind, from: string, to: string) => string | null;
+  deleteGroup: (kind: CatalogKind, group: string) => string | null;
   addTag: (kind: CatalogKind, group: string, tag: string) => string | null;
   renameTag: (
     kind: CatalogKind,
@@ -47,14 +49,59 @@ export const TagCatalogProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const addGroup = useCallback((kind: CatalogKind, group: string) => {
     const name = group.trim();
-    if (!name) return '请输入分组名';
+    if (!name) return '请输入分类名';
     let err: string | null = null;
     setCatalogs((prev) => {
       if (prev[kind].some((g) => g.group === name)) {
-        err = '分组已存在';
+        err = '分类已存在';
         return prev;
       }
       return { ...prev, [kind]: [...prev[kind], { group: name, tags: [] }] };
+    });
+    return err;
+  }, []);
+
+  const renameGroup = useCallback((kind: CatalogKind, from: string, to: string) => {
+    const nextName = to.trim();
+    if (!from) return '请选择分类';
+    if (!nextName) return '请输入分类名';
+    let err: string | null = null;
+    setCatalogs((prev) => {
+      if (!prev[kind].some((g) => g.group === from)) {
+        err = '分类不存在';
+        return prev;
+      }
+      if (nextName !== from && prev[kind].some((g) => g.group === nextName)) {
+        err = '分类已存在';
+        return prev;
+      }
+      return {
+        ...prev,
+        [kind]: prev[kind].map((g) => (g.group === from ? { ...g, group: nextName } : g)),
+      };
+    });
+    return err;
+  }, []);
+
+  const deleteGroup = useCallback((kind: CatalogKind, group: string) => {
+    const name = group.trim();
+    if (!name) return '请选择分类';
+    let err: string | null = null;
+    setCatalogs((prev) => {
+      const hit = prev[kind].find((g) => g.group === name);
+      if (!hit) {
+        err = '分类不存在';
+        return prev;
+      }
+      if ((hit.tags || []).length > 0) {
+        err = '分类下还有标签，请先删除或移走标签';
+        return prev;
+      }
+      if (prev[kind].length <= 1) {
+        err = '至少保留一个分类';
+        return prev;
+      }
+      return { ...prev, [kind]: prev[kind].filter((g) => g.group !== name) };
     });
     return err;
   }, []);
@@ -124,8 +171,17 @@ export const TagCatalogProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   const value = useMemo(
-    () => ({ catalogs, getCatalog, addGroup, addTag, renameTag, deleteTag }),
-    [catalogs, getCatalog, addGroup, addTag, renameTag, deleteTag],
+    () => ({
+      catalogs,
+      getCatalog,
+      addGroup,
+      renameGroup,
+      deleteGroup,
+      addTag,
+      renameTag,
+      deleteTag,
+    }),
+    [catalogs, getCatalog, addGroup, renameGroup, deleteGroup, addTag, renameTag, deleteTag],
   );
 
   return <TagCatalogContext.Provider value={value}>{children}</TagCatalogContext.Provider>;

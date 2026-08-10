@@ -6,7 +6,6 @@ import React, { useRef, useState } from 'react';
 import {
   TagChips,
   TagLibraryDrawer,
-  TagPickerModal,
   remapTagInOverrides,
   removeTagFromOverrides,
   tagKey,
@@ -14,6 +13,7 @@ import {
   type TagItem,
 } from '@/components/Tagging';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
+import { goDataTagCreate } from '../utils/dataTagCreate';
 
 type StoreItem = {
   id: string;
@@ -59,10 +59,7 @@ const StoreTaggingPage: React.FC = () => {
   const actionRef = useRef<ActionType | null>(null);
   const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
   const [selectedRows, setSelectedRows] = useState<StoreItem[]>([]);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [pickerMode, setPickerMode] = useState<'replace' | 'append'>('replace');
-  const [currentRow, setCurrentRow] = useState<StoreItem>();
 
   const getTags = (row: StoreItem) => tagOverrides[row.id] || row.tags || seedTags(row);
 
@@ -76,11 +73,8 @@ const StoreTaggingPage: React.FC = () => {
     return n;
   };
 
-  const openSingle = (row: StoreItem) => {
-    setCurrentRow(row);
-    setPickerMode('replace');
-    setPickerOpen(true);
-  };
+  const goTagRow = (row: StoreItem) =>
+    goDataTagCreate('store', [{ id: row.id, name: row.name }]);
 
   const columns: ProColumns<StoreItem>[] = [
     {
@@ -134,7 +128,7 @@ const StoreTaggingPage: React.FC = () => {
       search: false,
       width: 240,
       render: (_, row) => (
-        <TagChips tags={getTags(row)} catalog={catalog} onClick={() => openSingle(row)} />
+        <TagChips tags={getTags(row)} catalog={catalog} onClick={() => goTagRow(row)} />
       ),
     },
     {
@@ -143,7 +137,7 @@ const StoreTaggingPage: React.FC = () => {
       search: false,
       width: 120,
       render: (_, row) => [
-        <a key="tag" onClick={() => openSingle(row)}>
+        <a key="tag" onClick={() => goTagRow(row)}>
           打标
         </a>,
         <a key="view" onClick={() => message.info(`查看店铺「${row.name}」（演示）`)}>
@@ -175,14 +169,15 @@ const StoreTaggingPage: React.FC = () => {
             管理标签库
           </Button>,
           <Button
-            key="batch"
+            key="batchTag"
             type="primary"
             disabled={!selectedRows.length}
-            onClick={() => {
-              setCurrentRow(undefined);
-              setPickerMode('append');
-              setPickerOpen(true);
-            }}
+            onClick={() =>
+              goDataTagCreate(
+                'store',
+                selectedRows.map((r) => ({ id: r.id, name: r.name })),
+              )
+            }
           >
             批量打标{selectedRows.length ? `（${selectedRows.length}）` : ''}
           </Button>,
@@ -209,36 +204,6 @@ const StoreTaggingPage: React.FC = () => {
             data = data.filter((x) => (x.area || '').includes(String(params.areaSearch)));
           }
           return { ...res, data, total: data.length };
-        }}
-      />
-      <TagPickerModal
-        open={pickerOpen}
-        onOpenChange={setPickerOpen}
-        title={
-          pickerMode === 'append'
-            ? `批量打标 · 已选 ${selectedRows.length} 店`
-            : `店铺打标 · ${currentRow?.name || ''}`
-        }
-        catalog={catalog}
-        mode={pickerMode}
-        value={pickerMode === 'append' ? [] : currentRow ? getTags(currentRow) : []}
-        onSave={(next) => {
-          if (pickerMode === 'append') {
-            setTagOverrides((prev) => {
-              const map = { ...prev };
-              selectedRows.forEach((row) => {
-                const base = getTags(row);
-                const merged = new Map(base.map((t) => [`${t.group}::${t.tag}`, t]));
-                next.forEach((t) => merged.set(`${t.group}::${t.tag}`, t));
-                map[row.id] = Array.from(merged.values());
-              });
-              return map;
-            });
-            setSelectedRows([]);
-          } else if (currentRow) {
-            setTagOverrides((prev) => ({ ...prev, [currentRow.id]: next }));
-          }
-          actionRef.current?.reload();
         }}
       />
       <TagLibraryDrawer

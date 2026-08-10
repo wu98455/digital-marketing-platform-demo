@@ -6,12 +6,12 @@ import React from 'react';
 const STEPS = [
   {
     title: '数据打标',
-    description: '给客户/店铺/商品/专题活动贴标签',
-    path: '/tag-center/customer',
+    description: '人群标签与实体打标',
+    path: '/tag-center/list',
   },
   {
     title: '目标人群',
-    description: '用标签圈出人包',
+    description: '用标签生成人包',
     path: '/crowd',
   },
   {
@@ -66,11 +66,8 @@ const Welcome: React.FC = () => {
             if (target) history.push(target.path);
           }}
         />
-        <Typography.Paragraph type="secondary">
-          「客户资产（旧）」保留在菜单末尾，便于继续完善企微/微盟/导入等细节，不影响主叙事。
-        </Typography.Paragraph>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          演示账号：demo / 123456
+          演示账号：demo（管理员）/ tagger（打标）/ marketer（营销），密码均为 123456
         </Typography.Paragraph>
       </Card>
     </PageContainer>

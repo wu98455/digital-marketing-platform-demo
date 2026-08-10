@@ -6,7 +6,6 @@ import React, { useMemo, useRef, useState } from 'react';
 import {
   TagChips,
   TagLibraryDrawer,
-  TagPickerModal,
   flattenGroups,
   remapTagInOverrides,
   removeTagFromOverrides,
@@ -17,6 +16,7 @@ import {
 import { listPagination, listSearchProps } from '@/utils/listSearch';
 import RegionSelectModal from '@/pages/customer-asset/customer-list/components/RegionSelectModal';
 import StoreSelectModal from '@/pages/customer-asset/customer-list/components/StoreSelectModal';
+import { goDataTagCreate } from '../utils/dataTagCreate';
 
 export type CustomerItem = {
   id: string;
@@ -35,6 +35,7 @@ export type CustomerItem = {
   constellation?: string;
   storeName?: string;
   tags?: { group: string; tags: string[] }[];
+  tagInstances?: { group: string; tag: string; source?: string }[];
 };
 
 const seedTags = (id: string): TagItem[] => {
@@ -62,9 +63,12 @@ type Props = {
 
 const CustomerTaggingList: React.FC<Props> = ({
   showTaggingTip = true,
-  headerTitle = '客户 · 打标',
+  headerTitle,
 }) => {
   const location = useLocation();
+  const resolvedTitle =
+    headerTitle ||
+    (location.pathname.startsWith('/tag-center/customer') ? '客户' : '会员标签');
   const { getCatalog } = useTagCatalog();
   const catalog = getCatalog('customer');
   const actionRef = useRef<ActionType | null>(null);
@@ -74,10 +78,7 @@ const CustomerTaggingList: React.FC<Props> = ({
   const [selectedRegions, setSelectedRegions] = useState<{ code: string; name: string }[]>([]);
   const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
   const [selectedRows, setSelectedRows] = useState<CustomerItem[]>([]);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [pickerMode, setPickerMode] = useState<'replace' | 'append'>('replace');
-  const [currentRow, setCurrentRow] = useState<CustomerItem>();
 
   const viewBase = location.pathname.startsWith('/tag-center')
     ? '/tag-center/customer'
@@ -85,8 +86,18 @@ const CustomerTaggingList: React.FC<Props> = ({
 
   const getTags = (row: CustomerItem): TagItem[] => {
     if (tagOverrides[row.id]) return tagOverrides[row.id];
+    if (row.tagInstances?.length) {
+      return row.tagInstances.map((t) => ({ group: t.group, tag: t.tag }));
+    }
     if (row.tags?.length) return flattenGroups(row.tags);
     return seedTags(row.id);
+  };
+
+  const getTagSourceHint = (row: CustomerItem) => {
+    const list = row.tagInstances || [];
+    if (!list.length) return '';
+    const sources = Array.from(new Set(list.map((t) => t.source).filter(Boolean)));
+    return sources.slice(0, 2).join('、');
   };
 
   const countUsage = (item: TagItem) => {
@@ -100,17 +111,10 @@ const CustomerTaggingList: React.FC<Props> = ({
     return n;
   };
 
-  const openSingle = (row: CustomerItem) => {
-    setCurrentRow(row);
-    setPickerMode('replace');
-    setPickerOpen(true);
-  };
-
-  const openBatch = () => {
-    setCurrentRow(undefined);
-    setPickerMode('append');
-    setPickerOpen(true);
-  };
+  const goTagRow = (row: CustomerItem) =>
+    goDataTagCreate('customer', [
+      { id: row.id, name: row.name || row.customerIdMasked },
+    ]);
 
   const tagFilterOptions = useMemo(
     () =>
@@ -239,9 +243,16 @@ const CustomerTaggingList: React.FC<Props> = ({
       title: '已打标签',
       dataIndex: 'tags',
       search: false,
-      width: 260,
+      width: 280,
       render: (_, row) => (
-        <TagChips tags={getTags(row)} catalog={catalog} onClick={() => openSingle(row)} />
+        <Space direction="vertical" size={0}>
+          <TagChips tags={getTags(row)} catalog={catalog} onClick={() => goTagRow(row)} />
+          {getTagSourceHint(row) ? (
+            <span style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>
+              来源：{getTagSourceHint(row)}
+            </span>
+          ) : null}
+        </Space>
       ),
     },
     {
@@ -250,7 +261,7 @@ const CustomerTaggingList: React.FC<Props> = ({
       search: false,
       width: 120,
       render: (_, row) => [
-        <a key="tag" onClick={() => openSingle(row)}>
+        <a key="tag" onClick={() => goTagRow(row)}>
           打标
         </a>,
         <a key="view" onClick={() => history.push(`${viewBase}/view/${row.id}`)}>
@@ -268,11 +279,11 @@ const CustomerTaggingList: React.FC<Props> = ({
           showIcon
           closable
           style={{ marginBottom: 16 }}
-          message="标签像贴纸：一条数据可贴多个；贴好后可在「目标人群」里用来圈人。可用「管理标签库」增删改标签。"
+          message="本页支持查看客户标签与打标。"
         />
       ) : null}
       <ProTable<CustomerItem>
-        headerTitle={headerTitle}
+        headerTitle={resolvedTitle}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -283,13 +294,21 @@ const CustomerTaggingList: React.FC<Props> = ({
         }}
         toolBarRender={() => [
           <Button key="lib" onClick={() => setLibraryOpen(true)}>
-            管理标签库
+            标签管理
           </Button>,
           <Button
-            key="batch"
+            key="batchTag"
             type="primary"
             disabled={!selectedRows.length}
-            onClick={openBatch}
+            onClick={() =>
+              goDataTagCreate(
+                'customer',
+                selectedRows.map((r) => ({
+                  id: r.id,
+                  name: r.name || r.customerIdMasked,
+                })),
+              )
+            }
           >
             批量打标{selectedRows.length ? `（${selectedRows.length}）` : ''}
           </Button>,
@@ -344,38 +363,6 @@ const CustomerTaggingList: React.FC<Props> = ({
         onOk={(rows) => {
           setSelectedRegions(rows);
           setRegionOpen(false);
-          actionRef.current?.reload();
-        }}
-      />
-      <TagPickerModal
-        open={pickerOpen}
-        onOpenChange={setPickerOpen}
-        title={
-          pickerMode === 'append'
-            ? `批量打标 · 已选 ${selectedRows.length} 人`
-            : `客户打标 · ${currentRow?.name || currentRow?.customerIdMasked || ''}`
-        }
-        catalog={catalog}
-        mode={pickerMode}
-        value={
-          pickerMode === 'append' ? [] : currentRow ? getTags(currentRow) : []
-        }
-        onSave={(next) => {
-          if (pickerMode === 'append') {
-            setTagOverrides((prev) => {
-              const map = { ...prev };
-              selectedRows.forEach((row) => {
-                const base = getTags(row);
-                const merged = new Map(base.map((t) => [`${t.group}::${t.tag}`, t]));
-                next.forEach((t) => merged.set(`${t.group}::${t.tag}`, t));
-                map[row.id] = Array.from(merged.values());
-              });
-              return map;
-            });
-            setSelectedRows([]);
-          } else if (currentRow) {
-            setTagOverrides((prev) => ({ ...prev, [currentRow.id]: next }));
-          }
           actionRef.current?.reload();
         }}
       />

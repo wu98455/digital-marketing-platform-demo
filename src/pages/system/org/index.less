@@ -1,0 +1,45 @@
+.orgLayout {
+  display: flex;
+  gap: 16px;
+  min-height: 560px;
+}
+
+.orgLeft {
+  flex: 0 0 320px;
+  max-width: 360px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
+}
+
+.orgRight {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
+}
+
+.orgTreeNode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.orgTreeTitle {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orgEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+  color: rgba(0, 0, 0, 0.45);
+}

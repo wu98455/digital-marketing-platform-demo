@@ -1,4 +1,3 @@
-import { useClientDemoMock } from './demoMock';
 import { resolveDemoApi } from './demoApiRouter';
 
 type DemoRequestConfig = {
@@ -17,7 +16,10 @@ type DemoResponse = {
   config: DemoRequestConfig;
 };
 
-/** GitHub Pages 等无后端环境：用本地路由替代真实 HTTP */
+/**
+ * 演示接口统一走本地路由（含系统管理 localStorage 用户表），
+ * 保证开发 / Pages 生产与审批校验共用同一份用户配置。
+ */
 export function createDemoApiAdapter() {
   return async (config: DemoRequestConfig): Promise<DemoResponse> => {
     const data = resolveDemoApi({
@@ -43,4 +45,4 @@ export function createDemoApiAdapter() {
   };
 }
 
-export { useClientDemoMock };
+export { useClientDemoMock } from './demoMock';

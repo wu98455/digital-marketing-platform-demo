@@ -11,8 +11,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   TagChips,
   TagLibraryDrawer,
-  TagPickerModal,
-  formatFlatTags,
   parseFlatTags,
   remapTagInOverrides,
   removeTagFromOverrides,
@@ -21,6 +19,7 @@ import {
   type TagItem,
 } from '@/components/Tagging';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
+import { goDataTagCreate } from '../utils/dataTagCreate';
 
 type ProductItem = {
   id: string;
@@ -55,10 +54,7 @@ const ProductTaggingPage: React.FC = () => {
   });
   const [selectedRows, setSelectedRows] = useState<ProductItem[]>([]);
   const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [pickerMode, setPickerMode] = useState<'replace' | 'append'>('replace');
-  const [currentRow, setCurrentRow] = useState<ProductItem>();
 
   useEffect(() => {
     request('/api/customer-asset/products/summary').then((res) => {
@@ -90,11 +86,8 @@ const ProductTaggingPage: React.FC = () => {
     return n;
   };
 
-  const openSingle = (row: ProductItem) => {
-    setCurrentRow(row);
-    setPickerMode('replace');
-    setPickerOpen(true);
-  };
+  const goTagRow = (row: ProductItem) =>
+    goDataTagCreate('product', [{ id: row.id, name: row.name }]);
 
   const columns: ProColumns<ProductItem>[] = [
     {
@@ -159,7 +152,7 @@ const ProductTaggingPage: React.FC = () => {
         <TagChips
           tags={getTags(row)}
           catalog={catalog}
-          onClick={() => openSingle(row)}
+          onClick={() => goTagRow(row)}
         />
       ),
     },
@@ -170,7 +163,7 @@ const ProductTaggingPage: React.FC = () => {
       search: false,
       width: 120,
       render: (_, row) => [
-        <a key="tag" onClick={() => openSingle(row)}>
+        <a key="tag" onClick={() => goTagRow(row)}>
           打标
         </a>,
         <a key="view" onClick={() => message.info('查看商品（演示）')}>
@@ -208,14 +201,15 @@ const ProductTaggingPage: React.FC = () => {
             管理标签库
           </Button>,
           <Button
-            key="batch"
+            key="batchTag"
             type="primary"
             disabled={!selectedRows.length}
-            onClick={() => {
-              setCurrentRow(undefined);
-              setPickerMode('append');
-              setPickerOpen(true);
-            }}
+            onClick={() =>
+              goDataTagCreate(
+                'product',
+                selectedRows.map((r) => ({ id: r.id, name: r.name })),
+              )
+            }
           >
             批量打标{selectedRows.length ? `（${selectedRows.length}）` : ''}
           </Button>,
@@ -234,38 +228,6 @@ const ProductTaggingPage: React.FC = () => {
             });
           }
           return { ...res, data, total: tagFilter.length ? data.length : res.total };
-        }}
-      />
-      <TagPickerModal
-        open={pickerOpen}
-        onOpenChange={setPickerOpen}
-        title={
-          pickerMode === 'append'
-            ? `批量打标 · 已选 ${selectedRows.length} 个商品`
-            : `商品打标 · ${currentRow?.name || ''}`
-        }
-        catalog={catalog}
-        mode={pickerMode}
-        value={pickerMode === 'append' ? [] : currentRow ? getTags(currentRow) : []}
-        onSave={(next) => {
-          if (pickerMode === 'append') {
-            setTagOverrides((prev) => {
-              const map = { ...prev };
-              selectedRows.forEach((row) => {
-                const base = getTags(row);
-                const merged = new Map(base.map((t) => [`${t.group}::${t.tag}`, t]));
-                next.forEach((t) => merged.set(`${t.group}::${t.tag}`, t));
-                map[row.id] = Array.from(merged.values());
-              });
-              return map;
-            });
-            setSelectedRows([]);
-          } else if (currentRow) {
-            setTagOverrides((prev) => ({ ...prev, [currentRow.id]: next }));
-          }
-          // 同步扁平串便于客户资产旧列表兜底展示
-          void formatFlatTags(next);
-          actionRef.current?.reload();
         }}
       />
       <TagLibraryDrawer

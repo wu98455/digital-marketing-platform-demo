@@ -1,35 +1,18 @@
 /**
  * 登录态与演示数据：
  * - 登录 / 当前用户 / 退出：始终走 localStorage，同浏览器刷新后仍保持登录
- * - 业务列表等：开发走 Umi mock，生产静态包走本地函数
+ * - 账号来自系统用户表（systemAdminStore）
  */
 
-const AUTH_KEY = 'antd-prototype-demo-auth';
+import {
+  appendAudit,
+  findUserByUsername,
+  getRoleById,
+  getUsers,
+  saveUsers,
+} from './systemAdminStore';
 
-const demoUser: API.CurrentUser = {
-  name: '演示管理员',
-  avatar:
-    'https://gw.alipayobjects.com/zos/antfincdn/XAosXuNZyF/BiazfanxmamNRoxxVxka.png',
-  userid: '00000001',
-  email: 'demo@marketing.local',
-  signature: '数据驱动增长，精准触达用户',
-  title: '营销运营',
-  group: '数字营销平台－运营部',
-  tags: [
-    { key: '0', label: '增长黑客' },
-    { key: '1', label: '数据分析' },
-  ],
-  notifyCount: 12,
-  unreadCount: 11,
-  country: 'China',
-  access: 'admin',
-  geographic: {
-    province: { label: '浙江省', key: '330000' },
-    city: { label: '杭州市', key: '330100' },
-  },
-  address: '西湖区工专路 77 号',
-  phone: '0752-268888888',
-};
+const AUTH_KEY = 'antd-prototype-demo-auth';
 
 const tableData: API.RuleListItem[] = Array.from({ length: 20 }).map(
   (_, index) => ({
@@ -58,29 +41,106 @@ export function isDemoAuthed() {
   return !!localStorage.getItem(AUTH_KEY);
 }
 
-export function setDemoAuth(authority = 'admin') {
-  localStorage.setItem(AUTH_KEY, authority);
+export function getDemoUsername() {
+  return localStorage.getItem(AUTH_KEY) || '';
+}
+
+export function setDemoAuth(username: string) {
+  localStorage.setItem(AUTH_KEY, username);
 }
 
 export function clearDemoAuth() {
   localStorage.removeItem(AUTH_KEY);
 }
 
+function toCurrentUser(username: string): API.CurrentUser {
+  const user = findUserByUsername(username);
+  const role = user ? getRoleById(user.roleId) : getRoleById('admin');
+  const access =
+    user?.roleId === 'admin' ? 'admin' : user?.roleId === 'tagger' ? 'tagger' : 'marketer';
+  return {
+    name: user?.name || username,
+    avatar:
+      'https://gw.alipayobjects.com/zos/antfincdn/XAosXuNZyF/BiazfanxmamNRoxxVxka.png',
+    userid: user?.id || '00000001',
+    email: `${username}@marketing.local`,
+    signature: role.description,
+    title: role.name,
+    group: '数字营销平台',
+    tags: [{ key: '0', label: role.name }],
+    notifyCount: 12,
+    unreadCount: 11,
+    country: 'China',
+    access,
+    phone: '0752-268888888',
+    // 扩展字段：活动侧读 username
+    username: user?.username || username,
+    roleId: user?.roleId || 'admin',
+  } as API.CurrentUser;
+}
+
 export async function demoLogin(body: API.LoginParams): Promise<API.LoginResult> {
   await new Promise((r) => setTimeout(r, 200));
-  const valid =
-    (body.username === 'demo' && body.password === '123456') ||
-    (body.username === 'admin' && body.password === 'ant.design') ||
-    (body.username === 'user' && body.password === 'ant.design') ||
-    body.type === 'mobile';
+  const username = String(body.username || '');
+  const password = String(body.password || '');
 
-  if (valid) {
-    const authority = body.username === 'user' ? 'user' : 'admin';
-    setDemoAuth(authority);
+  // 兼容旧演示账号：user/ant.design → marketer
+  let user = findUserByUsername(username);
+  if (!user && username === 'user' && password === 'ant.design') {
+    user = findUserByUsername('marketer');
+  }
+  // 兜底：用户表异常时仍保证 demo/admin 可登录
+  if (!user && username === 'demo' && password === '123456') {
+    user = {
+      id: 'u-demo',
+      username: 'demo',
+      name: '演示管理员',
+      password: '123456',
+      status: '启用',
+      roleId: 'admin',
+      approverIds: ['WangSiyi', 'JiangYajuan', 'marketer'],
+      allowSelfApprove: true,
+    };
+  }
+  if (!user && username === 'admin' && password === 'ant.design') {
+    user = findUserByUsername('admin') || {
+      id: 'u-admin',
+      username: 'admin',
+      name: '系统管理员',
+      password: 'ant.design',
+      status: '启用',
+      roleId: 'admin',
+      approverIds: ['demo'],
+      allowSelfApprove: true,
+    };
+  }
+
+  const validMobile = body.type === 'mobile';
+  const passwordOk = user && user.password === password && user.status === '启用';
+
+  if ((user && passwordOk) || validMobile) {
+    const loginName = user?.username || 'demo';
+    setDemoAuth(loginName);
+    const list = getUsers();
+    const idx = list.findIndex((u) => u.username === loginName);
+    if (idx >= 0) {
+      const copy = [...list];
+      copy[idx] = {
+        ...copy[idx],
+        lastLoginAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      };
+      saveUsers(copy);
+    }
+    try {
+      appendAudit(loginName, '登录');
+    } catch {
+      // 审计失败不影响登录
+    }
+    const roleId = findUserByUsername(loginName)?.roleId || user?.roleId || 'admin';
     return {
       status: 'ok',
       type: body.type,
-      currentAuthority: authority,
+      currentAuthority: roleId === 'admin' ? 'admin' : 'user',
     };
   }
 
@@ -105,11 +165,21 @@ export async function demoCurrentUser(): Promise<{ data: API.CurrentUser }> {
     error.response = { status: 401 };
     throw error;
   }
-  const access = localStorage.getItem(AUTH_KEY) || 'admin';
-  return { data: { ...demoUser, access } };
+  const username = getDemoUsername() || 'demo';
+  // 兼容旧 auth 值 admin/user
+  const mapped =
+    username === 'admin' || username === 'user'
+      ? username === 'user'
+        ? 'marketer'
+        : 'demo'
+      : username;
+  if (mapped !== username) setDemoAuth(mapped);
+  return { data: toCurrentUser(mapped) };
 }
 
 export async function demoOutLogin() {
+  const username = getDemoUsername();
+  if (username) appendAudit(username, '退出登录');
   clearDemoAuth();
   return { data: {}, success: true };
 }

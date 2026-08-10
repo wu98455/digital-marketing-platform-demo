@@ -15,6 +15,9 @@ declare namespace API {
     unreadCount?: number;
     country?: string;
     access?: string;
+    /** 登录账号（系统用户 username） */
+    username?: string;
+    roleId?: string;
     geographic?: {
       province?: { label?: string; key?: string };
       city?: { label?: string; key?: string };

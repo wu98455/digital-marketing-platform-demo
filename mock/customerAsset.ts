@@ -125,10 +125,11 @@ const customers = Array.from({ length: 48 }).map((_, i) => {
     constellation: i % 7 === 0 ? '金牛座' : '',
     status: i % 8 === 0 ? '潜在客户' : '正式客户',
     memberId: `M${10000 + i}`,
+    memberLevel: ['普通', '银卡', '金卡', '黑金'][i % 4],
   };
 });
 
-const crowds = [
+export let crowds = [
   {
     id: '241075',
     name: '国企优品高价值客户',
@@ -228,6 +229,22 @@ const crowds = [
     canCopy: true,
   },
 ];
+
+export function addCrowd(item: (typeof crowds)[number]) {
+  crowds = [item, ...crowds];
+}
+
+function mergePendingCrowds() {
+  try {
+    const { pendingCrowds } = require('./tagStore') as typeof import('./tagStore');
+    while (pendingCrowds.length) {
+      const item = pendingCrowds.shift();
+      if (item) crowds = [item as (typeof crowds)[number], ...crowds];
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 const shopTags = Array.from({ length: 12 }).map((_, i) => ({
   id: `st${1000 + i}`,
@@ -355,11 +372,24 @@ export default {
     res.json(pageSlice(topicCampaigns, current, pageSize));
   },
   'GET /api/customer-asset/customers': (req: Request, res: Response) => {
-    const { current = 1, pageSize = 20, customerId, phone, name } = req.query as Record<
+    const { current = 1, pageSize = 20, customerId, phone, name, tagKey } = req.query as Record<
       string,
       string
     >;
-    let list = [...customers];
+    const { memberTagStore } = require('./tagStore') as typeof import('./tagStore');
+    let list = customers.map((c) => {
+      const storeTags = memberTagStore[c.id] || [];
+      const tagGroups: Record<string, string[]> = {};
+      storeTags.forEach((t) => {
+        tagGroups[t.group] = tagGroups[t.group] || [];
+        if (!tagGroups[t.group].includes(t.tag)) tagGroups[t.group].push(t.tag);
+      });
+      return {
+        ...c,
+        tagInstances: storeTags,
+        tags: Object.keys(tagGroups).map((group) => ({ group, tags: tagGroups[group] })),
+      };
+    });
     if (customerId) {
       list = list.filter(
         (x) => x.customerId.includes(customerId) || x.customerIdMasked.includes(customerId),
@@ -370,6 +400,12 @@ export default {
     }
     if (name) {
       list = list.filter((x) => (x.name || '').includes(name));
+    }
+    if (tagKey) {
+      const [g, t] = String(tagKey).split('::');
+      list = list.filter((x) =>
+        (x.tagInstances || []).some((ti) => ti.group === g && ti.tag === t),
+      );
     }
     res.json(pageSlice(list, current, pageSize));
   },
@@ -453,6 +489,7 @@ export default {
     });
   },
   'GET /api/customer-asset/crowds': (req: Request, res: Response) => {
+    mergePendingCrowds();
     const { current = 1, pageSize = 20, keyword, type, catalog, onlyMine, creator } =
       req.query as Record<string, string>;
     let list = [...crowds];

@@ -1,3 +1,11 @@
+import { systemAdminHandlers } from './systemAdminHandlers';
+import { appendAudit, validateActivityApprover } from './systemAdminStore';
+import {
+  emptyTagRuleConditions,
+  estimateCount as estimateTagCount,
+  samplesFromConditions,
+} from './tagRuleTypes';
+
 function pageSlice<T>(list: T[], current: string | number = 1, pageSize: string | number = 20) {
   const c = Number(current) || 1;
   const p = Number(pageSize) || 20;
@@ -149,10 +157,80 @@ const customers = Array.from({ length: 48 }).map((_, i) => {
     constellation: i % 7 === 0 ? '金牛座' : '',
     status: i % 8 === 0 ? '潜在客户' : '正式客户',
     memberId: `M${10000 + i}`,
+    memberLevel: ['普通', '银卡', '金卡', '黑金'][i % 4],
   };
 });
 
-const crowds = [
+const memberTagStore: Record<string, { group: string; tag: string; source: string }[]> = {};
+
+let tagRules: {
+  id: string;
+  name: string;
+  targetTag: { group: string; tag: string };
+  conditions: Record<string, any>;
+  enabled: boolean;
+  lastRunAt?: string;
+  lastRunCount?: number;
+  creator?: string;
+  updatedAt: string;
+  createdAt: string;
+}[] = [
+  {
+    id: 'RULE001',
+    name: '高价值活跃会员',
+    targetTag: { group: '客户价值', tag: '高价值' },
+    conditions: {
+      ...emptyTagRuleConditions(),
+      member: { groups: [{ levelId: '金卡', customerCompany: '乐和乐都' }] },
+      order: {
+        groups: [{ amount: { op: 'GREATER_THAN_OR_EQUAL', value: 500 }, salesMethod: '正常售卖' }],
+      },
+    },
+    enabled: true,
+    creator: 'demo',
+    lastRunAt: '2026-08-01 10:00:00',
+    lastRunCount: 18,
+    createdAt: '2026-07-20 09:00:00',
+    updatedAt: '2026-08-01 10:00:00',
+  },
+  {
+    id: 'RULE002',
+    name: '领券未核销召回',
+    targetTag: { group: '生命周期', tag: '沉默' },
+    conditions: {
+      ...emptyTagRuleConditions(),
+      coupon: { groups: [{ status: '已领取未核销', name: '召回券' }] },
+      member: {
+        groups: [{ createOrderNoType: '1次' }, { createOrderNoType: '0次' }],
+      },
+    },
+    enabled: true,
+    creator: 'WangSiyi',
+    createdAt: '2026-07-28 15:00:00',
+    updatedAt: '2026-07-28 15:00:00',
+  },
+];
+
+function mergeMemberTag(id: string, inst: { group: string; tag: string; source: string }) {
+  const prev = memberTagStore[id] || [];
+  const key = `${inst.group}::${inst.tag}`;
+  const next = prev.filter((t) => `${t.group}::${t.tag}` !== key);
+  next.push(inst);
+  memberTagStore[id] = next;
+}
+
+function applyTagsToMembers(
+  targetTag: { group: string; tag: string },
+  source: string,
+  conditions: Record<string, any>,
+) {
+  const count = estimateTagCount(conditions);
+  const ids = Array.from({ length: count }, (_, i) => `c${i + 1}`);
+  ids.forEach((id) => mergeMemberTag(id, { ...targetTag, source }));
+  return { count, ids };
+}
+
+let crowds = [
   {
     id: '241075',
     name: '国企优品高价值客户',
@@ -357,57 +435,113 @@ const taggingTasks = Array.from({ length: 6 }).map((_, i) => ({
   batchNo: `IMP202607${String(10 + i).padStart(2, '0')}`,
 }));
 
-const activities = Array.from({ length: 16 }).map((_, i) => ({
-  id: `ACT${202600 + i}`,
-  name: ['文旅新客召回', '会员日促销', '沉默客唤醒', '节日关怀触达', '高价值专属礼'][i % 5] + `-${i + 1}`,
-  status: ['草稿', '进行中', '已结束', '待审批', '已暂停'][i % 5],
-  catalog: ['文旅营销', '业务目录', '未分类'][i % 3],
-  creator: ['demo', 'WangSiyi', 'JiangYajuan'][i % 3],
-  createdAt: `2026-0${(i % 6) + 1}-${String(10 + (i % 15)).padStart(2, '0')} 10:00:00`,
-  periodic: i % 4 === 0,
-  mine: i % 3 === 0,
-  pendingApprove: i % 5 === 3,
-  canEdit: i % 5 !== 2,
-  canDelete: i % 5 !== 1,
-  pinned: i === 0,
-}));
+const ACTIVITY_STATUSES = ['草稿', '待审批', '已通过', '进行中', '已暂停', '已结束', '已驳回'] as const;
+const APPROVER_POOL = ['demo', 'WangSiyi', 'JiangYajuan'];
 
-const localTemplates = Array.from({ length: 10 }).map((_, i) => ({
+type ActivityRow = {
+  id: string;
+  name: string;
+  status: string;
+  catalog: string;
+  creator: string;
+  createdAt: string;
+  periodic: boolean;
+  mine: boolean;
+  approver: string;
+  canEdit: boolean;
+  canDelete: boolean;
+  pinned: boolean;
+};
+
+let activities: ActivityRow[] = Array.from({ length: 16 }).map((_, i) => {
+  const status = ACTIVITY_STATUSES[i % ACTIVITY_STATUSES.length];
+  const creator = APPROVER_POOL[i % 3];
+  const approver = APPROVER_POOL[(i + 1) % 3];
+  return {
+    id: `ACT${202600 + i}`,
+    name: ['文旅新客召回', '会员日促销', '沉默客唤醒', '节日关怀触达', '高价值专属礼'][i % 5] + `-${i + 1}`,
+    status,
+    catalog: ['文旅营销', '业务目录', '未分类'][i % 3],
+    creator,
+    createdAt: `2026-0${(i % 6) + 1}-${String(10 + (i % 15)).padStart(2, '0')} 10:00:00`,
+    periodic: i % 4 === 0,
+    mine: creator === 'demo',
+    approver: status === '待审批' && i % 7 === 1 ? 'demo' : approver,
+    canEdit: status !== '已结束',
+    canDelete: status !== '进行中',
+    pinned: i === 0,
+  };
+});
+
+(() => {
+  const pending = activities.find((a) => a.status === '待审批');
+  if (pending) pending.approver = 'demo';
+  const draft = activities.find((a) => a.status === '草稿');
+  if (draft) {
+    draft.approver = 'WangSiyi';
+    draft.creator = 'demo';
+    draft.mine = true;
+  }
+  const approved = activities.find((a) => a.status === '已通过');
+  if (approved) {
+    approved.approver = 'WangSiyi';
+    approved.creator = 'demo';
+    approved.mine = true;
+  }
+})();
+
+function findActivityRow(id: string) {
+  return activities.find((a) => a.id === id);
+}
+
+function patchActivityRow(id: string, patch: Partial<ActivityRow>) {
+  const idx = activities.findIndex((a) => a.id === id);
+  if (idx < 0) return null;
+  activities[idx] = { ...activities[idx], ...patch };
+  return activities[idx];
+}
+
+function isExecutedActivityStatus(status: string) {
+  return ['进行中', '已暂停', '已结束'].includes(status);
+}
+
+let localTemplates = Array.from({ length: 10 }).map((_, i) => ({
   id: `TPL${100 + i}`,
   name: ['新客欢迎流程', '复购激励', '生日关怀', '沉默召回'][i % 4] + `模板${i + 1}`,
-  catalog: ['所有', '业务目录', '未分类'][i % 3],
+  catalog: ['文旅营销', '业务目录', '未分类'][i % 3],
   target: ['全渠道会员', '店铺会员', '潜客'][i % 3],
   category: ['召回', '促活', '关怀'][i % 3],
   creator: ['demo', 'WangSiyi'][i % 2],
   createdAt: `2026-0${(i % 5) + 1}-15 14:00:00`,
   mine: i % 2 === 0,
-}));
-
-const cloudTemplates = Array.from({ length: 8 }).map((_, i) => ({
-  id: `CT${200 + i}`,
-  name: ['行业通用召回', '会员升级礼遇', '积分预到期提醒', '入会欢迎'][i % 4] + `-${i + 1}`,
-  scene: ['召回', '升级', '积分', '入会'][i % 4],
-  type: ['云模板', '专属模板'][i % 2],
-  receivedAt: `2026-06-${String(10 + i).padStart(2, '0')} 09:00:00`,
-}));
-
-const nodeRecords = Array.from({ length: 20 }).map((_, i) => ({
-  id: `NR${i + 1}`,
-  activityId: `ACT${202600 + (i % 8)}`,
-  activityName: ['文旅新客召回', '会员日促销', '沉默客唤醒'][i % 3],
   periodic: i % 3 === 0,
-  nodeId: `N${1000 + i}`,
-  nodeName: ['开始', '人群圈选', '短信触达', '等待', '结束'][i % 5],
-  nodeType: ['开始', '人群', '触达', '等待', '结束'][i % 5],
-  status: ['待执行', '执行中', '成功', '失败', '已跳过'][i % 5],
-  planAt: `2026-07-${String(20 - (i % 15)).padStart(2, '0')} ${String(8 + (i % 10)).padStart(2, '0')}:00:00`,
-  startAt: `2026-07-${String(20 - (i % 15)).padStart(2, '0')} ${String(8 + (i % 10)).padStart(2, '0')}:05:00`,
-  endAt: `2026-07-${String(20 - (i % 15)).padStart(2, '0')} ${String(8 + (i % 10)).padStart(2, '0')}:10:00`,
 }));
+
+const activityExecRecords = Array.from({ length: 20 }).map((_, i) => {
+  const status = ['待执行', '执行中', '成功', '失败', '部分成功'][i % 5];
+  const targetCount = 8000 + i * 137;
+  const reachSuccess = status === '待执行' ? 0 : Math.floor(targetCount * (0.7 + (i % 5) * 0.04));
+  const reachFail = status === '待执行' ? 0 : Math.floor(targetCount * (0.02 + (i % 4) * 0.01));
+  const day = String(20 - (i % 15)).padStart(2, '0');
+  const hour = String(8 + (i % 10)).padStart(2, '0');
+  return {
+    id: `AER${i + 1}`,
+    activityId: `ACT${202600 + (i % 8)}`,
+    activityName: ['文旅新客召回', '会员日促销', '沉默客唤醒', '节日关怀触达'][i % 4] + `-${(i % 8) + 1}`,
+    periodic: i % 3 === 0,
+    status,
+    startAt: status === '待执行' ? '' : `2026-07-${day} ${hour}:05:00`,
+    endAt: ['待执行', '执行中'].includes(status) ? '' : `2026-07-${day} ${hour}:40:00`,
+    targetCount,
+    reachSuccess,
+    reachFail,
+  };
+});
 
 type RouteContext = {
   params: Record<string, any>;
   pathParams: Record<string, string>;
+  data?: any;
 };
 
 type RouteDef = {
@@ -486,18 +620,40 @@ const routes: RouteDef[] = [
     method: 'GET',
     path: '/api/customer-asset/customers',
     handler: ({ params }) => {
-      const { current = 1, pageSize = 20, customerId, phone, name } = params;
-      let list = [...customers];
+      const { current = 1, pageSize = 20, customerId, phone, name, tagKey } = params;
+      let list = customers.map((c) => {
+        const storeTags = memberTagStore[c.id] || [];
+        const tagGroups: Record<string, string[]> = {};
+        storeTags.forEach((t) => {
+          tagGroups[t.group] = tagGroups[t.group] || [];
+          if (!tagGroups[t.group].includes(t.tag)) tagGroups[t.group].push(t.tag);
+        });
+        return {
+          ...c,
+          tagInstances: storeTags,
+          tags: Object.keys(tagGroups).map((group) => ({ group, tags: tagGroups[group] })),
+        };
+      });
       if (customerId) {
         list = list.filter(
-          (x) => x.customerId.includes(String(customerId)) || x.customerIdMasked.includes(String(customerId)),
+          (x) =>
+            x.customerId.includes(String(customerId)) ||
+            x.customerIdMasked.includes(String(customerId)),
         );
       }
       if (phone) {
-        list = list.filter((x) => x.phone.includes(String(phone)) || x.phoneMasked.includes(String(phone)));
+        list = list.filter(
+          (x) => x.phone.includes(String(phone)) || x.phoneMasked.includes(String(phone)),
+        );
       }
       if (name) {
         list = list.filter((x) => (x.name || '').includes(String(name)));
+      }
+      if (tagKey) {
+        const [g, t] = String(tagKey).split('::');
+        list = list.filter((x) =>
+          (x.tagInstances || []).some((ti) => ti.group === g && ti.tag === t),
+        );
       }
       return pageSlice(list, current, pageSize);
     },
@@ -648,6 +804,212 @@ const routes: RouteDef[] = [
   },
   {
     method: 'GET',
+    path: '/api/tag-center/person-tags',
+    handler: () => {
+      const map = new Map<
+        string,
+        {
+          group: string;
+          tag: string;
+          count: number;
+          ruleId?: string;
+          ruleName?: string;
+          creator?: string;
+          createdAt?: string;
+          updatedAt?: string;
+          lastRunAt?: string;
+        }
+      >();
+      tagRules.forEach((r) => {
+        const key = `${r.targetTag.group}::${r.targetTag.tag}`;
+        map.set(key, {
+          group: r.targetTag.group,
+          tag: r.targetTag.tag,
+          count: r.lastRunCount || 0,
+          ruleId: r.id,
+          ruleName: r.name,
+          creator: r.creator || 'demo',
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+          lastRunAt: r.lastRunAt,
+        });
+      });
+      const counts: Record<string, number> = {};
+      Object.values(memberTagStore).forEach((list) => {
+        list.forEach((t) => {
+          const key = `${t.group}::${t.tag}`;
+          counts[key] = (counts[key] || 0) + 1;
+        });
+      });
+      const data = Array.from(map.values()).map((row) => ({
+        ...row,
+        count: counts[`${row.group}::${row.tag}`] || row.count || 0,
+      }));
+      Object.keys(counts).forEach((key) => {
+        if (!map.has(key)) {
+          const [group, tag] = key.split('::');
+          data.push({ group, tag, count: counts[key] });
+        }
+      });
+      return { success: true, data };
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/tag-center/rules',
+    handler: ({ params }) => {
+      const { current = 1, pageSize = 10, keyword, enabled } = params;
+      let list = [...tagRules].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+      if (keyword) {
+        list = list.filter(
+          (x) =>
+            x.name.includes(String(keyword)) ||
+            x.targetTag.tag.includes(String(keyword)) ||
+            x.id.includes(String(keyword)),
+        );
+      }
+      if (enabled === 'true') list = list.filter((x) => x.enabled);
+      if (enabled === 'false') list = list.filter((x) => !x.enabled);
+      return pageSlice(list, current, pageSize);
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/tag-center/rules/:id',
+    handler: ({ pathParams }) => {
+      const item = tagRules.find((r) => r.id === pathParams.id);
+      if (!item) return { success: false, errorMessage: '规则不存在' };
+      return { success: true, data: item };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/tag-center/rules',
+    handler: ({ data }) => {
+      const body = (data || {}) as any;
+      if (!body.name?.trim()) return { success: false, errorMessage: '请填写规则名称' };
+      if (!body.targetTag?.group || !body.targetTag?.tag) {
+        return { success: false, errorMessage: '请选择目标标签' };
+      }
+      const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const item = {
+        id: `RULE${Date.now() % 100000}`,
+        name: String(body.name).trim(),
+        targetTag: body.targetTag,
+        conditions: body.conditions || {},
+        enabled: body.enabled !== false,
+        creator: body.creator || 'demo',
+        createdAt: ts,
+        updatedAt: ts,
+      };
+      tagRules = [item, ...tagRules];
+      return { success: true, data: item };
+    },
+  },
+  {
+    method: 'PUT',
+    path: '/api/tag-center/rules/:id',
+    handler: ({ pathParams, data }) => {
+      const idx = tagRules.findIndex((r) => r.id === pathParams.id);
+      if (idx < 0) return { success: false, errorMessage: '规则不存在' };
+      const body = (data || {}) as any;
+      const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      tagRules[idx] = {
+        ...tagRules[idx],
+        ...body,
+        id: tagRules[idx].id,
+        targetTag: body.targetTag || tagRules[idx].targetTag,
+        conditions: body.conditions ?? tagRules[idx].conditions,
+        updatedAt: ts,
+      };
+      return { success: true, data: tagRules[idx] };
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/tag-center/rules/:id',
+    handler: ({ pathParams }) => {
+      tagRules = tagRules.filter((r) => r.id !== pathParams.id);
+      return { success: true };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/tag-center/rules/preview',
+    handler: ({ data }) => {
+      const conditions = (data || {}).conditions || {};
+      const count = estimateTagCount(conditions);
+      return { success: true, data: { count, samples: samplesFromConditions(conditions) } };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/tag-center/rules/apply',
+    handler: ({ data }) => {
+      const body = (data || {}) as any;
+      if (!body.targetTag?.group || !body.targetTag?.tag) {
+        return { success: false, errorMessage: '请选择目标标签' };
+      }
+      const result = applyTagsToMembers(
+        body.targetTag,
+        body.source || '一次性打标',
+        body.conditions || {},
+      );
+      return { success: true, data: result };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/tag-center/rules/:id/run',
+    handler: ({ pathParams }) => {
+      const idx = tagRules.findIndex((r) => r.id === pathParams.id);
+      if (idx < 0) return { success: false, errorMessage: '规则不存在' };
+      const rule = tagRules[idx];
+      if (!rule.enabled) return { success: false, errorMessage: '规则已停用' };
+      const result = applyTagsToMembers(rule.targetTag, `规则:${rule.name}`, rule.conditions);
+      const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      tagRules[idx] = {
+        ...rule,
+        lastRunAt: ts,
+        lastRunCount: result.count,
+        updatedAt: ts,
+      };
+      return { success: true, data: { ...result, rule: tagRules[idx] } };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/tag-center/tags/create-crowd',
+    handler: ({ data }) => {
+      const body = (data || {}) as any;
+      const group = body.group || '';
+      const tag = body.tag || '';
+      let count = 0;
+      Object.values(memberTagStore).forEach((list) => {
+        if (list.some((t) => t.group === group && t.tag === tag)) count += 1;
+      });
+      if (!count) count = estimateTagCount({});
+      const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const crowd = {
+        id: String(240000 + (Date.now() % 10000)),
+        name: body.name || `标签「${tag}」人群`,
+        count,
+        type: '静态人群',
+        creator: 'demo',
+        source: body.ruleId ? '打标规则' : '人群标签',
+        createdAt: ts,
+        updatedAt: ts,
+        syncStatus: '未同步',
+        catalog: '文旅人群',
+        canDelete: true,
+        canCopy: true,
+      };
+      crowds = [crowd, ...crowds];
+      return { success: true, data: crowd };
+    },
+  },
+  {
+    method: 'GET',
     path: '/api/customer-asset/tags/shop',
     handler: ({ params }) => {
       const {
@@ -744,6 +1106,101 @@ const routes: RouteDef[] = [
   },
   {
     method: 'GET',
+    path: '/api/system/users',
+    handler: (ctx) => systemAdminHandlers.listUsers(ctx),
+  },
+  {
+    method: 'POST',
+    path: '/api/system/users',
+    handler: (ctx) => systemAdminHandlers.createUser(ctx),
+  },
+  {
+    method: 'PUT',
+    path: '/api/system/users/:id',
+    handler: (ctx) => systemAdminHandlers.updateUser(ctx),
+  },
+  {
+    method: 'POST',
+    path: '/api/system/users/:id/reset-password',
+    handler: (ctx) => systemAdminHandlers.resetPassword(ctx),
+  },
+  {
+    method: 'GET',
+    path: '/api/system/users/:username/approver-options',
+    handler: (ctx) => systemAdminHandlers.approverOptions(ctx),
+  },
+  {
+    method: 'GET',
+    path: '/api/system/roles',
+    handler: () => systemAdminHandlers.listRoles(),
+  },
+  {
+    method: 'POST',
+    path: '/api/system/roles',
+    handler: (ctx) => systemAdminHandlers.createRole(ctx),
+  },
+  {
+    method: 'PUT',
+    path: '/api/system/roles/:id',
+    handler: (ctx) => systemAdminHandlers.updateRole(ctx),
+  },
+  {
+    method: 'DELETE',
+    path: '/api/system/roles/:id',
+    handler: (ctx) => systemAdminHandlers.deleteRole(ctx),
+  },
+  {
+    method: 'GET',
+    path: '/api/system/menus',
+    handler: () => systemAdminHandlers.getMenus(),
+  },
+  {
+    method: 'POST',
+    path: '/api/system/menus',
+    handler: (ctx) => systemAdminHandlers.createMenu(ctx),
+  },
+  {
+    method: 'PUT',
+    path: '/api/system/menus/:key',
+    handler: (ctx) => systemAdminHandlers.updateMenu(ctx),
+  },
+  {
+    method: 'DELETE',
+    path: '/api/system/menus/:key',
+    handler: (ctx) => systemAdminHandlers.deleteMenu(ctx),
+  },
+  {
+    method: 'POST',
+    path: '/api/system/menus/reset',
+    handler: (ctx) => systemAdminHandlers.resetMenus(ctx),
+  },
+  {
+    method: 'GET',
+    path: '/api/system/audit-logs',
+    handler: (ctx) => systemAdminHandlers.listAudit(ctx),
+  },
+  {
+    method: 'GET',
+    path: '/api/system/org/tree',
+    handler: (ctx) => systemAdminHandlers.getOrgTree(ctx),
+  },
+  {
+    method: 'POST',
+    path: '/api/system/org/nodes',
+    handler: (ctx) => systemAdminHandlers.upsertOrg(ctx),
+  },
+  {
+    method: 'DELETE',
+    path: '/api/system/org/nodes/:key',
+    handler: (ctx) => systemAdminHandlers.deleteOrg(ctx),
+  },
+  {
+    method: 'GET',
+    path: '/api/system/org/persons',
+    handler: (ctx) => systemAdminHandlers.listOrgPersons(ctx),
+  },
+  {
+    method: 'GET',
     path: '/api/crowd-marketing/activities',
     handler: ({ params }) => {
       const {
@@ -752,27 +1209,67 @@ const routes: RouteDef[] = [
         catalog,
         keyword,
         status,
+        creator,
+        periodic,
         onlyPeriodic,
         onlyMine,
         pendingApprove,
+        currentUser = 'demo',
       } = params;
       let list = [...activities];
-      if (catalog && catalog !== '所有') list = list.filter((x) => x.catalog === catalog);
+      if (catalog && catalog !== '所有' && catalog !== '全部') {
+        list = list.filter((x) => x.catalog === catalog);
+      }
       if (keyword) {
         list = list.filter((x) => x.name.includes(String(keyword)) || x.id.includes(String(keyword)));
       }
       if (status && status !== '全部') list = list.filter((x) => x.status === status);
+      if (creator) list = list.filter((x) => x.creator.includes(String(creator)));
+      if (periodic === '是') list = list.filter((x) => x.periodic);
+      if (periodic === '否') list = list.filter((x) => !x.periodic);
       if (onlyPeriodic === 'true') list = list.filter((x) => x.periodic);
-      if (onlyMine === 'true') list = list.filter((x) => x.mine);
-      if (pendingApprove === 'true') list = list.filter((x) => x.pendingApprove);
+      if (onlyMine === 'true') {
+        list = list.filter((x) => x.mine || x.creator === currentUser);
+      }
+      if (pendingApprove === 'true') {
+        list = list.filter((x) => x.status === '待审批' && x.approver === currentUser);
+      }
       return pageSliceMarketing(list, current, pageSize);
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/crowd-marketing/activities',
+    handler: ({ data }) => {
+      const body = (data || {}) as Record<string, any>;
+      const creator = String(body.currentUser || body.creator || 'demo');
+      const approver = String(body.approver || '');
+      const err = validateActivityApprover(creator, approver);
+      if (err) return { success: false, errorMessage: err };
+      const item: ActivityRow = {
+        id: `ACT${Date.now() % 1000000}`,
+        name: body.name || '未命名活动',
+        status: '草稿',
+        catalog: body.category || body.catalog || '未分类',
+        creator,
+        createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        periodic: !!body.periodic,
+        mine: true,
+        approver,
+        canEdit: true,
+        canDelete: true,
+        pinned: false,
+      };
+      activities = [item, ...activities];
+      appendAudit(creator, '创建活动', item.name);
+      return { success: true, data: item };
     },
   },
   {
     method: 'GET',
     path: '/api/crowd-marketing/activities/:id',
     handler: ({ pathParams }) => {
-      const item = activities.find((a) => a.id === pathParams.id) || activities[0];
+      const item = findActivityRow(pathParams.id) || activities[0];
       return {
         success: true,
         data: {
@@ -789,15 +1286,112 @@ const routes: RouteDef[] = [
     },
   },
   {
+    method: 'POST',
+    path: '/api/crowd-marketing/activities/:id/submit-approve',
+    handler: ({ pathParams }) => {
+      const item = findActivityRow(pathParams.id);
+      if (!item) return { success: false, errorMessage: '活动不存在' };
+      if (!['草稿', '已驳回'].includes(item.status)) {
+        return { success: false, errorMessage: `当前状态「${item.status}」不可提交审批` };
+      }
+      if (!item.approver) return { success: false, errorMessage: '请先指定审批人' };
+      return { success: true, data: patchActivityRow(item.id, { status: '待审批' }) };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/crowd-marketing/activities/:id/approve',
+    handler: ({ pathParams, data, params }) => {
+      const currentUser = String(data?.currentUser || params.currentUser || 'demo');
+      const item = findActivityRow(pathParams.id);
+      if (!item) return { success: false, errorMessage: '活动不存在' };
+      if (item.status !== '待审批') return { success: false, errorMessage: '仅待审批活动可通过' };
+      if (item.approver !== currentUser) return { success: false, errorMessage: '仅指定审批人可通过' };
+      const patched = patchActivityRow(item.id, { status: '已通过' });
+      appendAudit(currentUser, '审批通过', item.name);
+      return { success: true, data: patched };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/crowd-marketing/activities/:id/reject',
+    handler: ({ pathParams, data, params }) => {
+      const currentUser = String(data?.currentUser || params.currentUser || 'demo');
+      const item = findActivityRow(pathParams.id);
+      if (!item) return { success: false, errorMessage: '活动不存在' };
+      if (item.status !== '待审批') return { success: false, errorMessage: '仅待审批活动可驳回' };
+      if (item.approver !== currentUser) return { success: false, errorMessage: '仅指定审批人可驳回' };
+      const patched = patchActivityRow(item.id, { status: '已驳回' });
+      appendAudit(currentUser, '审批驳回', item.name);
+      return {
+        success: true,
+        data: patched,
+        remark: data?.remark,
+      };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/crowd-marketing/activities/:id/formal-run',
+    handler: ({ pathParams }) => {
+      const item = findActivityRow(pathParams.id);
+      if (!item) return { success: false, errorMessage: '活动不存在' };
+      if (item.status === '已暂停') {
+        return { success: true, data: patchActivityRow(item.id, { status: '进行中' }) };
+      }
+      if (item.status !== '已通过') {
+        return { success: false, errorMessage: '须审批通过后才能正式执行' };
+      }
+      return { success: true, data: patchActivityRow(item.id, { status: '进行中' }) };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/crowd-marketing/activities/:id/pause',
+    handler: ({ pathParams }) => {
+      const item = findActivityRow(pathParams.id);
+      if (!item) return { success: false, errorMessage: '活动不存在' };
+      if (item.status !== '进行中') return { success: false, errorMessage: '仅进行中的活动可暂停' };
+      return { success: true, data: patchActivityRow(item.id, { status: '已暂停' }) };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/crowd-marketing/activities/:id/invalidate-approve',
+    handler: ({ pathParams }) => {
+      const item = findActivityRow(pathParams.id);
+      if (!item) return { success: false, errorMessage: '活动不存在' };
+      if (!['已通过', '进行中', '已暂停'].includes(item.status)) {
+        return { success: true, data: item, changed: false };
+      }
+      return { success: true, data: patchActivityRow(item.id, { status: '草稿' }), changed: true };
+    },
+  },
+  {
     method: 'GET',
     path: '/api/crowd-marketing/activities/:id/report',
     handler: ({ pathParams }) => {
-      const item = activities.find((a) => a.id === pathParams.id) || activities[0];
+      const item = findActivityRow(pathParams.id) || activities[0];
+      const executed = isExecutedActivityStatus(item.status);
+      if (!executed) {
+        return {
+          success: true,
+          data: {
+            id: item.id,
+            name: item.name,
+            status: item.status,
+            executed: false,
+            execStatus: '未执行',
+          },
+        };
+      }
       return {
         success: true,
         data: {
           id: item.id,
           name: item.name,
+          status: item.status,
+          executed: true,
           execStatus: item.status === '进行中' ? '执行中' : '执行完成',
           startAt: '2026-07-20 10:00:00',
           endAt: '2026-07-20 12:30:00',
@@ -835,14 +1429,46 @@ const routes: RouteDef[] = [
     method: 'GET',
     path: '/api/crowd-marketing/templates/local',
     handler: ({ params }) => {
-      const { current = 1, pageSize = 10, catalog, keyword, onlyMine } = params;
+      const { current = 1, pageSize = 10, catalog, keyword, onlyMine, periodic } = params;
       let list = [...localTemplates];
-      if (catalog && catalog !== '所有') list = list.filter((x) => x.catalog === catalog);
+      if (catalog && catalog !== '所有' && catalog !== '全部') {
+        list = list.filter((x) => x.catalog === catalog);
+      }
       if (keyword) {
         list = list.filter((x) => x.name.includes(String(keyword)) || x.id.includes(String(keyword)));
       }
+      if (periodic === '是') list = list.filter((x) => x.periodic);
+      if (periodic === '否') list = list.filter((x) => !x.periodic);
       if (onlyMine === 'true') list = list.filter((x) => x.mine);
       return pageSliceMarketing(list, current, pageSize);
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/crowd-marketing/templates/local',
+    handler: ({ data }) => {
+      const body = (data || {}) as Record<string, any>;
+      const item = {
+        id: `TPL${Date.now() % 100000}`,
+        name: body.name || '未命名模板',
+        catalog: body.catalog || '未分类',
+        target: body.target || '全渠道会员',
+        category: body.category || '促活',
+        creator: 'demo',
+        createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        mine: true,
+        periodic: !!body.periodic,
+      };
+      localTemplates = [item, ...localTemplates];
+      return { success: true, data: item };
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/crowd-marketing/templates/local/:id',
+    handler: ({ pathParams }) => {
+      localTemplates = localTemplates.filter((t) => t.id !== pathParams.id);
+      return { success: true };
     },
   },
   {
@@ -866,26 +1492,25 @@ const routes: RouteDef[] = [
   },
   {
     method: 'GET',
-    path: '/api/crowd-marketing/templates/cloud',
-    handler: ({ params }) => {
-      const { current = 1, pageSize = 10, keyword, type } = params;
-      let list = [...cloudTemplates];
-      if (keyword) {
-        list = list.filter((x) => x.name.includes(String(keyword)) || x.id.includes(String(keyword)));
-      }
-      if (type && type !== '全部') list = list.filter((x) => x.type === type);
-      return pageSliceMarketing(list, current, pageSize);
-    },
-  },
-  {
-    method: 'GET',
     path: '/api/crowd-marketing/node-records',
     handler: ({ params }) => {
-      const { current = 1, pageSize = 10, activityId, activityName, nodeStatus } = params;
-      let list = [...nodeRecords].sort((a, b) => (a.planAt < b.planAt ? 1 : -1));
-      if (activityId) list = list.filter((x) => x.activityId.includes(String(activityId)));
+      const { current = 1, pageSize = 10, activityName, status, periodic, startAtRange } = params;
+      let list = [...activityExecRecords].sort((a, b) => (a.startAt < b.startAt ? 1 : -1));
       if (activityName) list = list.filter((x) => x.activityName.includes(String(activityName)));
-      if (nodeStatus && nodeStatus !== '全部') list = list.filter((x) => x.status === nodeStatus);
+      if (status && status !== '全部') list = list.filter((x) => x.status === status);
+      if (periodic === '是') list = list.filter((x) => x.periodic);
+      if (periodic === '否') list = list.filter((x) => !x.periodic);
+      if (startAtRange) {
+        const range = String(startAtRange).split(',');
+        if (range.length === 2) {
+          const [from, to] = range;
+          list = list.filter((x) => {
+            if (!x.startAt) return false;
+            const d = x.startAt.slice(0, 10);
+            return d >= from && d <= to;
+          });
+        }
+      }
       return pageSliceMarketing(list, current, pageSize);
     },
   },
@@ -909,7 +1534,7 @@ export function resolveDemoApi(input: {
     if (pathParams === null) {
       continue;
     }
-    return route.handler({ params, pathParams });
+    return route.handler({ params, pathParams, data: input.data });
   }
 
   return null;

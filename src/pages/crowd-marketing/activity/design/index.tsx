@@ -29,7 +29,7 @@ import {
   ZoomOutOutlined,
 } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
-import { history, request, useParams } from '@umijs/max';
+import { history, request, useLocation, useParams } from '@umijs/max';
 import {
   Button,
   Collapse,
@@ -289,7 +289,12 @@ const chainEdges = (list: CanvasNode[]): CanvasEdge[] =>
 
 const ActivityDesign: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const { pathname } = useLocation();
+  const isTemplate = pathname.includes('/crowd-marketing/template/');
   const [data, setData] = useState<any>();
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const flowChangeRef = useRef<() => Promise<void>>(async () => {});
   const [loading, setLoading] = useState(false);
   const [toolboxKeyword, setToolboxKeyword] = useState('');
   const [nodeKeyword, setNodeKeyword] = useState('');
@@ -301,6 +306,8 @@ const ActivityDesign: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string>('');
   const [selectedEdgeId, setSelectedEdgeId] = useState<string>('');
   const [configNode, setConfigNode] = useState<CanvasNode | null>(null);
+  const [saveTplOpen, setSaveTplOpen] = useState(false);
+  const [saveTplName, setSaveTplName] = useState('');
   const [crowdOptions, setCrowdOptions] = useState<{ id: string; name: string; count: number }[]>(
     [],
   );
@@ -337,7 +344,10 @@ const ActivityDesign: React.FC = () => {
 
   useEffect(() => {
     setLoading(true);
-    request(`/api/crowd-marketing/activities/${id}`)
+    const url = isTemplate
+      ? `/api/crowd-marketing/templates/local/${id}`
+      : `/api/crowd-marketing/activities/${id}`;
+    request(url)
       .then((res) => {
         setData(res.data);
         const apiNodes: any[] = res.data?.nodes || [];
@@ -362,7 +372,7 @@ const ActivityDesign: React.FC = () => {
         setSelectedEdgeId('');
       })
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, isTemplate]);
 
   useEffect(() => {
     request('/api/customer-asset/crowds', { params: { current: 1, pageSize: 100 } }).then(
@@ -433,6 +443,7 @@ const ActivityDesign: React.FC = () => {
     setSelectedId(nid);
     setSelectedEdgeId('');
     message.success(`已添加节点「${item.name}」${selectedId ? '并连到当前选中节点' : ''}（演示）`);
+    void flowChangeRef.current();
   };
 
   const deleteNode = (nodeId?: string) => {
@@ -451,6 +462,7 @@ const ActivityDesign: React.FC = () => {
     setEdges((prev) => prev.filter((e) => e.source !== targetId && e.target !== targetId));
     if (selectedId === targetId) setSelectedId('');
     message.success(`已删除节点「${target.name}」`);
+    void flowChangeRef.current();
   };
 
   const deleteEdge = (edgeId?: string) => {
@@ -459,6 +471,7 @@ const ActivityDesign: React.FC = () => {
     setEdges((prev) => prev.filter((e) => e.id !== targetId));
     if (selectedEdgeId === targetId) setSelectedEdgeId('');
     message.success('已删除连线');
+    void flowChangeRef.current();
   };
 
   const clientToWorld = (clientX: number, clientY: number) => {
@@ -556,6 +569,7 @@ const ActivityDesign: React.FC = () => {
         if (target) {
           if (addEdge(linkDrag.current.sourceId, target.id)) {
             message.success(`已连接 →「${target.name}」`);
+            void flowChangeRef.current();
           }
         }
         linkDrag.current = null;
@@ -626,6 +640,79 @@ const ActivityDesign: React.FC = () => {
   const gridSize = 20 * (zoom / 100);
   const tip = (text: string) => () => message.info(`${text}（演示）`);
 
+  const invalidateIfNeeded = async () => {
+    if (isTemplate || !id) return;
+    const status = dataRef.current?.status;
+    if (!['已通过', '进行中', '已暂停'].includes(status)) return;
+    const res = await request<{ success: boolean; changed?: boolean; data?: any }>(
+      `/api/crowd-marketing/activities/${id}/invalidate-approve`,
+      { method: 'POST' },
+    );
+    if (res?.changed) {
+      setData(res.data);
+      message.warning('流程已变更，需重新提交审批');
+    }
+  };
+  flowChangeRef.current = invalidateIfNeeded;
+
+  const handleSubmitApprove = async () => {
+    if (!id) return;
+    if (!['草稿', '已驳回'].includes(data?.status)) {
+      message.warning(`当前状态「${data?.status || '-'}」不可提交审批`);
+      return;
+    }
+    const res = await request<{ success: boolean; errorMessage?: string; data?: any }>(
+      `/api/crowd-marketing/activities/${id}/submit-approve`,
+      { method: 'POST' },
+    );
+    if (res?.success === false) {
+      message.error(res.errorMessage || '提交失败');
+      return;
+    }
+    setData(res.data);
+    message.success('已提交审批');
+  };
+
+  const handleFormalRun = async () => {
+    if (!id) return;
+    const res = await request<{ success: boolean; errorMessage?: string; data?: any }>(
+      `/api/crowd-marketing/activities/${id}/formal-run`,
+      { method: 'POST' },
+    );
+    if (res?.success === false) {
+      message.warning(res.errorMessage || '须审批通过后才能正式执行');
+      return;
+    }
+    setData(res.data);
+    message.success('已开始正式执行');
+  };
+
+  const handlePause = async () => {
+    if (!id) return;
+    const res = await request<{ success: boolean; errorMessage?: string; data?: any }>(
+      `/api/crowd-marketing/activities/${id}/pause`,
+      { method: 'POST' },
+    );
+    if (res?.success === false) {
+      message.warning(res.errorMessage || '无法暂停');
+      return;
+    }
+    setData(res.data);
+    message.success('已暂停');
+  };
+
+  const handleTestRun = () => {
+    message.success('测试执行已触发（演示，无需审批）');
+  };
+
+  const statusTagColor = (status?: string) => {
+    if (status === '已通过' || status === '进行中') return 'success';
+    if (status === '待审批') return 'warning';
+    if (status === '已驳回') return 'error';
+    if (status === '已暂停') return 'default';
+    return 'processing';
+  };
+
   const renderEdgePath = (
     from: CanvasNode,
     to: CanvasNode,
@@ -675,33 +762,49 @@ const ActivityDesign: React.FC = () => {
     <PageContainer
       title={false}
       loading={loading}
-      onBack={() => history.push('/crowd-marketing/activity')}
+      onBack={() =>
+        history.push(isTemplate ? '/crowd-marketing/template/local' : '/crowd-marketing/activity')
+      }
       className={fullscreen ? 'activity-canvas-page is-fullscreen' : 'activity-canvas-page'}
     >
       <div className="activity-canvas-shell">
         <div className="activity-canvas-toolbar">
           <Space wrap size={4}>
-            <Tag color="processing" icon={<FormOutlined />}>
-              设计中
+            <Tag color={isTemplate ? 'processing' : statusTagColor(data?.status)} icon={<FormOutlined />}>
+              {isTemplate ? '模板设计' : data?.status || '设计中'}
             </Tag>
-            <Typography.Text strong>{data?.name || '营销活动'}</Typography.Text>
+            <Typography.Text strong>
+              {data?.name || (isTemplate ? '营销活动模板' : '营销活动')}
+            </Typography.Text>
             <Typography.Text type="secondary">ID：{data?.id || id}</Typography.Text>
+            {!isTemplate && data?.approver ? (
+              <Typography.Text type="secondary">审批人：{data.approver}</Typography.Text>
+            ) : null}
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               右侧圆点拖出连线（可一连多）· Delete 删除 · 双击配置节点
             </Typography.Text>
           </Space>
           <div className="activity-canvas-actions">
-            <Button type="text" size="small" onClick={tip('活动信息')}>
-              活动信息
-            </Button>
             <Button
               type="text"
               size="small"
-              icon={<SaveOutlined />}
-              onClick={() => message.success('已保存为模板（演示）')}
+              onClick={tip(isTemplate ? '模板信息' : '活动信息')}
             >
-              保存为模板
+              {isTemplate ? '模板信息' : '活动信息'}
             </Button>
+            {!isTemplate ? (
+              <Button
+                type="text"
+                size="small"
+                icon={<SaveOutlined />}
+                onClick={() => {
+                  setSaveTplName(`${data?.name || '营销活动'}-模板`);
+                  setSaveTplOpen(true);
+                }}
+              >
+                保存为模板
+              </Button>
+            ) : null}
             <Input.Search
               size="small"
               allowClear
@@ -727,25 +830,41 @@ const ActivityDesign: React.FC = () => {
             <Button type="text" size="small" onClick={tip('自动排版')}>
               自动排版
             </Button>
-            <Button type="text" size="small" icon={<PlayCircleOutlined />} onClick={tip('测试执行')}>
-              测试执行
-            </Button>
-            <Button type="text" size="small" icon={<CloudUploadOutlined />} onClick={tip('正式执行')}>
-              正式执行
-            </Button>
-            <Button type="text" size="small" icon={<PauseCircleOutlined />} onClick={tip('暂停')}>
-              暂停
-            </Button>
-            <Button type="text" size="small" onClick={tip('提交审批')}>
-              提交审批
-            </Button>
-            <Button
-              type="text"
-              size="small"
-              onClick={() => history.push(`/crowd-marketing/activity/report/${id}`)}
-            >
-              查看报告
-            </Button>
+            {!isTemplate ? (
+              <>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<PlayCircleOutlined />}
+                  onClick={handleTestRun}
+                >
+                  测试执行
+                </Button>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CloudUploadOutlined />}
+                  onClick={handleFormalRun}
+                >
+                  正式执行
+                </Button>
+                <Button type="text" size="small" icon={<PauseCircleOutlined />} onClick={handlePause}>
+                  暂停
+                </Button>
+                <Button type="text" size="small" onClick={handleSubmitApprove}>
+                  提交审批
+                </Button>
+                {['进行中', '已暂停', '已结束'].includes(data?.status) ? (
+                  <Button
+                    type="text"
+                    size="small"
+                    onClick={() => history.push(`/crowd-marketing/activity/report/${id}`)}
+                  >
+                    执行结果
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
             <Space size={0}>
               <Button
                 type="text"
@@ -971,6 +1090,7 @@ const ActivityDesign: React.FC = () => {
               prev.map((n) => (n.id === configNode.id ? { ...n, ...configNode } : n)),
             );
             message.success('已保存节点配置（演示）');
+            void flowChangeRef.current();
           }
           setConfigNode(null);
         }}
@@ -1075,6 +1195,41 @@ const ActivityDesign: React.FC = () => {
           </Form>
         )}
       </Modal>
+      {!isTemplate ? (
+        <Modal
+          title="保存为模板"
+          open={saveTplOpen}
+          onCancel={() => setSaveTplOpen(false)}
+          onOk={async () => {
+            const name = saveTplName.trim();
+            if (!name) {
+              message.warning('请填写模板名称');
+              return;
+            }
+            await request('/api/crowd-marketing/templates/local', {
+              method: 'POST',
+              data: {
+                name,
+                catalog: data?.catalog || '未分类',
+                target: '全渠道会员',
+              },
+            });
+            message.success('已保存为模板，可在营销管理 · 营销活动模板中查看');
+            setSaveTplOpen(false);
+          }}
+          destroyOnHidden
+        >
+          <Form layout="vertical">
+            <Form.Item label="模板名称" required>
+              <Input
+                value={saveTplName}
+                onChange={(e) => setSaveTplName(e.target.value)}
+                placeholder="请输入模板名称"
+              />
+            </Form.Item>
+          </Form>
+        </Modal>
+      ) : null}
     </PageContainer>
   );
 };

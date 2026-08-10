@@ -21,9 +21,9 @@ import {
 import { TagCatalogProvider } from '@/components/Tagging';
 import { currentUser as queryCurrentUser } from '@/services/ant-design-pro/api';import {
   createDemoApiAdapter,
-  useClientDemoMock,
 } from '@/utils/clientApiMock';
 import { withPublicPath, stripPublicPath } from '@/utils/publicPath';
+import { applyMenuDataOverrides } from '@/utils/systemAdminStore';
 import defaultSettings from '../config/defaultSettings';
 import { errorConfig } from './requestErrorConfig';
 
@@ -108,11 +108,12 @@ export const layout: RunTimeLayoutConfig = ({
     },
     avatarProps: {
       src: initialState?.currentUser?.avatar,
-      title: 'ProUser',
+      title: initialState?.currentUser?.name || 'User',
       render: (_, avatarChildren) => (
         <AvatarDropdown>{avatarChildren}</AvatarDropdown>
       ),
     },
+    menuDataRender: (menuData) => applyMenuDataOverrides(menuData),
     // waterMarkProps: {
     //   content: initialState?.currentUser?.name,
     // },
@@ -224,11 +225,7 @@ export const layout: RunTimeLayoutConfig = ({
 export const request: RequestConfig = {
   baseURL: '',
   ...errorConfig,
-  ...(useClientDemoMock
-    ? {
-        adapter: createDemoApiAdapter(),
-      }
-    : {}),
+  adapter: createDemoApiAdapter(),
 };
 
 export function rootContainer(container: React.ReactNode) {

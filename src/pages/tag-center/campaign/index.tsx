@@ -6,7 +6,6 @@ import React, { useRef, useState } from 'react';
 import {
   TagChips,
   TagLibraryDrawer,
-  TagPickerModal,
   remapTagInOverrides,
   removeTagFromOverrides,
   tagKey,
@@ -14,6 +13,7 @@ import {
   type TagItem,
 } from '@/components/Tagging';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
+import { goDataTagCreate } from '../utils/dataTagCreate';
 
 type CampaignItem = {
   id: string;
@@ -60,10 +60,7 @@ const CampaignTaggingPage: React.FC = () => {
   const actionRef = useRef<ActionType | null>(null);
   const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
   const [selectedRows, setSelectedRows] = useState<CampaignItem[]>([]);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [pickerMode, setPickerMode] = useState<'replace' | 'append'>('replace');
-  const [currentRow, setCurrentRow] = useState<CampaignItem>();
 
   const getTags = (row: CampaignItem) => tagOverrides[row.id] || row.tags || seedTags(row);
 
@@ -77,11 +74,8 @@ const CampaignTaggingPage: React.FC = () => {
     return n;
   };
 
-  const openSingle = (row: CampaignItem) => {
-    setCurrentRow(row);
-    setPickerMode('replace');
-    setPickerOpen(true);
-  };
+  const goTagRow = (row: CampaignItem) =>
+    goDataTagCreate('campaign', [{ id: row.id, name: row.name }]);
 
   const columns: ProColumns<CampaignItem>[] = [
     { title: '活动名称', dataIndex: 'nameSearch', hideInTable: true },
@@ -141,7 +135,7 @@ const CampaignTaggingPage: React.FC = () => {
         <TagChips
           tags={getTags(row)}
           catalog={catalog}
-          onClick={() => openSingle(row)}
+          onClick={() => goTagRow(row)}
         />
       ),
     },
@@ -151,7 +145,7 @@ const CampaignTaggingPage: React.FC = () => {
       search: false,
       width: 120,
       render: (_, row) => [
-        <a key="tag" onClick={() => openSingle(row)}>
+        <a key="tag" onClick={() => goTagRow(row)}>
           打标
         </a>,
         <a key="view" onClick={() => message.info(`查看专题活动「${row.name}」（演示）`)}>
@@ -168,7 +162,7 @@ const CampaignTaggingPage: React.FC = () => {
         showIcon
         closable
         style={{ marginBottom: 16 }}
-        message="「专题活动」是可打标的活动主数据；自动化流程请到「人群营销 · 营销活动」画布。"
+        message="「专题活动」是可打标的活动主数据；自动化流程请到「营销管理 · 营销活动」画布。"
       />
       <ProTable<CampaignItem>
         headerTitle="专题活动 · 打标"
@@ -183,14 +177,15 @@ const CampaignTaggingPage: React.FC = () => {
             管理标签库
           </Button>,
           <Button
-            key="batch"
+            key="batchTag"
             type="primary"
             disabled={!selectedRows.length}
-            onClick={() => {
-              setCurrentRow(undefined);
-              setPickerMode('append');
-              setPickerOpen(true);
-            }}
+            onClick={() =>
+              goDataTagCreate(
+                'campaign',
+                selectedRows.map((r) => ({ id: r.id, name: r.name })),
+              )
+            }
           >
             批量打标{selectedRows.length ? `（${selectedRows.length}）` : ''}
           </Button>,
@@ -211,36 +206,6 @@ const CampaignTaggingPage: React.FC = () => {
             data = data.filter((x) => x.status === params.statusSearch);
           }
           return { ...res, data, total: data.length };
-        }}
-      />
-      <TagPickerModal
-        open={pickerOpen}
-        onOpenChange={setPickerOpen}
-        title={
-          pickerMode === 'append'
-            ? `批量打标 · 已选 ${selectedRows.length} 个活动`
-            : `专题活动打标 · ${currentRow?.name || ''}`
-        }
-        catalog={catalog}
-        mode={pickerMode}
-        value={pickerMode === 'append' ? [] : currentRow ? getTags(currentRow) : []}
-        onSave={(next) => {
-          if (pickerMode === 'append') {
-            setTagOverrides((prev) => {
-              const map = { ...prev };
-              selectedRows.forEach((row) => {
-                const base = getTags(row);
-                const merged = new Map(base.map((t) => [`${t.group}::${t.tag}`, t]));
-                next.forEach((t) => merged.set(`${t.group}::${t.tag}`, t));
-                map[row.id] = Array.from(merged.values());
-              });
-              return map;
-            });
-            setSelectedRows([]);
-          } else if (currentRow) {
-            setTagOverrides((prev) => ({ ...prev, [currentRow.id]: next }));
-          }
-          actionRef.current?.reload();
         }}
       />
       <TagLibraryDrawer

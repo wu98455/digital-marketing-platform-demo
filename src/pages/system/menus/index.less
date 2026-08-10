@@ -1,0 +1,54 @@
+.menuTreeTable {
+  :global {
+    .ant-table-tbody > tr > td:first-child {
+      position: relative;
+    }
+
+    /* 树形缩进竖线 */
+    .ant-table-row-level-1 > td:first-child::before,
+    .ant-table-row-level-2 > td:first-child::before,
+    .ant-table-row-level-3 > td:first-child::before {
+      content: '';
+      position: absolute;
+      left: 12px;
+      top: 0;
+      bottom: 0;
+      border-left: 1px solid rgba(0, 0, 0, 0.15);
+    }
+
+    .ant-table-row-level-2 > td:first-child::before {
+      left: 36px;
+    }
+
+    .ant-table-row-level-3 > td:first-child::before {
+      left: 60px;
+    }
+
+    .ant-table-row-level-1 > td:first-child::after,
+    .ant-table-row-level-2 > td:first-child::after,
+    .ant-table-row-level-3 > td:first-child::after {
+      content: '';
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      width: 12px;
+      border-top: 1px solid rgba(0, 0, 0, 0.15);
+    }
+
+    .ant-table-row-level-2 > td:first-child::after {
+      left: 36px;
+    }
+
+    .ant-table-row-level-3 > td:first-child::after {
+      left: 60px;
+    }
+  }
+}
+
+.menuName {
+  font-weight: 500;
+}
+
+.muted {
+  color: rgba(0, 0, 0, 0.45);
+}
