@@ -82,12 +82,6 @@ export default [
         hideInMenu: true,
       },
       {
-        path: '/tag-center/data-create/:kind',
-        name: 'tag-data-create',
-        component: './tag-center/data-create',
-        hideInMenu: true,
-      },
-      {
         path: '/tag-center/edit/:group/:tag',
         name: 'tag-edit',
         component: './tag-center/create',
@@ -356,6 +350,28 @@ export default [
   { path: '/customer-asset/crowd', redirect: '/crowd' },
   { path: '/customer-asset/crowd/create', redirect: '/crowd/create' },
   { path: '/customer-asset/crowd/custom', redirect: '/crowd' },
+  {
+    path: '/account',
+    hideInMenu: true,
+    routes: [
+      {
+        path: '/account',
+        redirect: '/account/settings',
+      },
+      {
+        path: '/account/settings',
+        name: 'account-settings',
+        component: './account/settings',
+        hideInMenu: true,
+      },
+      {
+        path: '/account/center',
+        name: 'account-center',
+        component: './account/center',
+        hideInMenu: true,
+      },
+    ],
+  },
   {
     path: '/',
     redirect: '/analytics',

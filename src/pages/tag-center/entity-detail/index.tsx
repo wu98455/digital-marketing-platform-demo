@@ -1,12 +1,17 @@
 import { PageContainer, ProCard, ProDescriptions } from '@ant-design/pro-components';
-import { history, request, useParams } from '@umijs/max';
-import { Button, Tag } from 'antd';
+import { request, useParams } from '@umijs/max';
+import { Button, Space, Tag } from 'antd';
 import React, { useEffect, useState } from 'react';
 import CenterTags from '@/components/CenterTags';
 import TitleWithTip from '@/components/TitleWithTip';
+import {
+  TagChips,
+  TagPickerModal,
+  useTagCatalog,
+  type CatalogKind,
+  type TagItem,
+} from '@/components/Tagging';
 import { pageHeader } from '@/utils/pageHeader';
-import { goDataTagCreate } from '../utils/dataTagCreate';
-import type { CatalogKind } from '@/components/Tagging';
 
 const KIND_META: Record<
   Exclude<CatalogKind, 'customer'>,
@@ -16,19 +21,19 @@ const KIND_META: Record<
     label: '店铺数据',
     listPath: '/tag-center/store',
     api: '/api/customer-asset/stores',
-    tip: '店铺标签用于圈人条件（如「曾在自营重点店下单」），结果永远是人包。',
+    tip: '店铺标签可在本页直接手动打标，用于圈人条件。',
   },
   product: {
     label: '商品数据',
     listPath: '/tag-center/product',
     api: '/api/customer-asset/products',
-    tip: '商品标签像贴纸：点色块贴上；可用于人群工坊圈选「买过某类商品」的人。',
+    tip: '商品标签可在本页直接手动打标。',
   },
   campaign: {
     label: '专题活动',
     listPath: '/tag-center/campaign',
     api: '/api/tag-center/campaigns',
-    tip: '「专题活动」是可打标的活动主数据；自动化流程请到「营销管理 · 营销活动」画布。',
+    tip: '专题活动标签可在本页直接手动打标。',
   },
 };
 
@@ -37,8 +42,12 @@ type Props = { kind: Exclude<CatalogKind, 'customer'> };
 const EntityDetailPage: React.FC<Props> = ({ kind }) => {
   const { id } = useParams<{ id: string }>();
   const meta = KIND_META[kind];
+  const { getCatalog } = useTagCatalog();
+  const catalog = getCatalog(kind);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>();
+  const [tags, setTags] = useState<TagItem[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -46,7 +55,21 @@ const EntityDetailPage: React.FC<Props> = ({ kind }) => {
     request<{ data: any[] }>(meta.api, { params: { current: 1, pageSize: 200 } })
       .then((res) => {
         const hit = (res.data || []).find((x) => String(x.id) === String(id));
-        setData(hit || { id, name: `${meta.label} ${id}` });
+        const row = hit || { id, name: `${meta.label} ${id}` };
+        setData(row);
+        if (Array.isArray(row.tags)) {
+          setTags(row.tags);
+        } else if (typeof row.tagValues === 'string' && row.tagValues && row.tagValues !== '--') {
+          setTags(
+            row.tagValues
+              .split(',')
+              .map((t: string) => t.trim())
+              .filter(Boolean)
+              .map((tag: string) => ({ group: '销售策略', tag })),
+          );
+        } else {
+          setTags([]);
+        }
       })
       .finally(() => setLoading(false));
   }, [id, kind, meta.api, meta.label]);
@@ -55,9 +78,7 @@ const EntityDetailPage: React.FC<Props> = ({ kind }) => {
     <PageContainer
       loading={loading}
       {...pageHeader({
-        title: (
-          <TitleWithTip title={`${meta.label}详情`} tip={meta.tip} />
-        ),
+        title: <TitleWithTip title={`${meta.label}详情`} tip={meta.tip} />,
         backTo: meta.listPath,
         crumbs: [
           { title: '数据打标', path: '/tag-center/list' },
@@ -65,12 +86,7 @@ const EntityDetailPage: React.FC<Props> = ({ kind }) => {
           { title: '详情' },
         ],
         extra: (
-          <Button
-            type="primary"
-            onClick={() =>
-              goDataTagCreate(kind, [{ id: String(data?.id || id), name: data?.name }])
-            }
-          >
+          <Button type="primary" onClick={() => setPickerOpen(true)}>
             打标
           </Button>
         ),
@@ -100,8 +116,27 @@ const EntityDetailPage: React.FC<Props> = ({ kind }) => {
           <ProDescriptions.Item label="分中心">
             <CenterTags centers={data?.centers || []} />
           </ProDescriptions.Item>
+          <ProDescriptions.Item label="标签" span={2}>
+            <Space>
+              <TagChips
+                tags={tags}
+                catalog={catalog}
+                emptyText="点击打标"
+                onClick={() => setPickerOpen(true)}
+              />
+            </Space>
+          </ProDescriptions.Item>
         </ProDescriptions>
       </ProCard>
+      <TagPickerModal
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title={`打标签 · ${data?.name || ''}`}
+        catalog={catalog}
+        mode="replace"
+        value={tags}
+        onSave={setTags}
+      />
     </PageContainer>
   );
 };

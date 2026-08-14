@@ -101,19 +101,28 @@ const CustomerViewPage: React.FC = () => {
           </Space>
           <div style={{ marginBottom: 16 }}>
             <Space align="center" wrap>
-              <Typography.Text type="secondary">已打标签</Typography.Text>
+              <Typography.Text type="secondary">
+                {fromTagCenter ? '已命中标签' : '已打标签'}
+              </Typography.Text>
               <TagChips
                 tags={headerChips}
                 catalog={catalog}
-                onClick={() => {
-                  setMainTab('portrait');
-                  setPortraitSub('custom');
-                  setTagEditOpen(true);
-                }}
+                emptyText="暂无标签"
+                onClick={
+                  fromTagCenter
+                    ? undefined
+                    : () => {
+                        setMainTab('portrait');
+                        setPortraitSub('custom');
+                        setTagEditOpen(true);
+                      }
+                }
               />
-              <Button type="link" size="small" onClick={() => setTagEditOpen(true)}>
-                编辑标签
-              </Button>
+              {!fromTagCenter ? (
+                <Button type="link" size="small" onClick={() => setTagEditOpen(true)}>
+                  编辑标签
+                </Button>
+              ) : null}
             </Space>
           </div>
 
@@ -284,7 +293,11 @@ const CustomerViewPage: React.FC = () => {
                         <Card
                           size="small"
                           title={g.group}
-                          extra={<a onClick={() => setTagEditOpen(true)}>编辑</a>}
+                          extra={
+                            fromTagCenter ? null : (
+                              <a onClick={() => setTagEditOpen(true)}>编辑</a>
+                            )
+                          }
                           style={{ marginBottom: 12 }}
                         >
                           {g.tags?.length ? (
@@ -298,11 +311,13 @@ const CustomerViewPage: React.FC = () => {
                         </Card>
                       </Col>
                     ))}
-                    <Col span={24}>
-                      <Button type="dashed" block onClick={() => setTagEditOpen(true)}>
-                        编辑全渠道客户标签
-                      </Button>
-                    </Col>
+                    {!fromTagCenter ? (
+                      <Col span={24}>
+                        <Button type="dashed" block onClick={() => setTagEditOpen(true)}>
+                          编辑全渠道客户标签
+                        </Button>
+                      </Col>
+                    ) : null}
                   </Row>
                 )}
                 {portraitSub === 'wecom' && (

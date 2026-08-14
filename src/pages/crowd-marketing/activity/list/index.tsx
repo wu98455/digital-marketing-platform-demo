@@ -5,7 +5,6 @@ import {
   ProFormSelect,
   ProFormSwitch,
   ProFormText,
-  ProFormTextArea,
   ProTable,
 } from '@ant-design/pro-components';
 import { history, request, useAccess, useModel } from '@umijs/max';
@@ -566,15 +565,12 @@ const ActivityList: React.FC = () => {
                 category: editingActivity.catalog,
                 target: '全渠道会员',
                 approver: editingActivity.approver,
-                balanceAlert: true,
                 periodic: !!editingActivity.periodic,
-                remark: '',
               }
             : {
                 category: '未分类',
                 target: '全渠道会员',
                 approver: defaultApprover,
-                balanceAlert: true,
                 periodic: false,
                 template: 'blank',
               }
@@ -698,8 +694,6 @@ const ActivityList: React.FC = () => {
             <TypographyHint allowSelf={approvalSettings.allowSelfApprove} />
           }
         />
-        <ProFormSwitch name="balanceAlert" label="余额不足提醒" initialValue />
-        <ProFormTextArea name="remark" label="备注" />
       </ModalForm>
 
       <ModalForm

@@ -5,6 +5,7 @@ import {
   CloudUploadOutlined,
   CompressOutlined,
   DeleteOutlined,
+  EllipsisOutlined,
   ExpandOutlined,
   FormOutlined,
   GiftOutlined,
@@ -13,6 +14,7 @@ import {
   PartitionOutlined,
   PauseCircleOutlined,
   PlayCircleOutlined,
+  QuestionCircleOutlined,
   RedoOutlined,
   SaveOutlined,
   SearchOutlined,
@@ -218,6 +220,8 @@ const ActivityDesign: React.FC = () => {
   const [configNode, setConfigNode] = useState<CanvasNode | null>(null);
   const [saveTplOpen, setSaveTplOpen] = useState(false);
   const [saveTplName, setSaveTplName] = useState('');
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [editName, setEditName] = useState('');
   const [crowdOptions, setCrowdOptions] = useState<
     { id: string; name: string; count: number; catalog: string }[]
   >([]);
@@ -249,6 +253,7 @@ const ActivityDesign: React.FC = () => {
   const linkDrag = useRef<{ sourceId: string } | null>(null);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
+  const canvasReadOnlyRef = useRef(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(zoom);
   const panRef = useRef(pan);
@@ -426,6 +431,10 @@ const ActivityDesign: React.FC = () => {
   }, [nodes]);
 
   const addEdge = (source: string, target: string) => {
+    if (canvasReadOnlyRef.current) {
+      message.warning(`当前状态「${dataRef.current?.status}」画布只读，不可连线`);
+      return false;
+    }
     if (!source || !target || source === target) return false;
     if (edgesRef.current.some((e) => e.source === source && e.target === target)) {
       message.warning('连线已存在');
@@ -454,6 +463,7 @@ const ActivityDesign: React.FC = () => {
   };
 
   const addNode = (item: ToolboxItem) => {
+    if (!guardEditable('添加节点')) return;
     const nid = `n_${Date.now()}`;
     const scale = zoom / 100;
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -478,6 +488,7 @@ const ActivityDesign: React.FC = () => {
   };
 
   const deleteNode = (nodeId?: string) => {
+    if (!guardEditable('删除节点')) return;
     const targetId = nodeId || selectedId;
     if (!targetId) {
       message.warning('请先选中要删除的节点');
@@ -497,6 +508,7 @@ const ActivityDesign: React.FC = () => {
   };
 
   const deleteEdge = (edgeId?: string) => {
+    if (!guardEditable('删除连线')) return;
     const targetId = edgeId || selectedEdgeId;
     if (!targetId) return;
     setEdges((prev) => prev.filter((e) => e.id !== targetId));
@@ -545,6 +557,10 @@ const ActivityDesign: React.FC = () => {
   const onPortMouseDown = (e: React.MouseEvent, node: CanvasNode) => {
     e.stopPropagation();
     e.preventDefault();
+    if (canvasReadOnly) {
+      message.warning(`当前状态「${data?.status}」画布只读，不可连线`);
+      return;
+    }
     setSelectedId(node.id);
     setSelectedEdgeId('');
     const from = outPoint(node);
@@ -676,10 +692,61 @@ const ActivityDesign: React.FC = () => {
   const gridSize = 20 * (zoom / 100);
   const tip = (text: string) => () => message.info(`${text}（演示）`);
 
+  const canvasReadOnly =
+    !isTemplate && ['待审批', '进行中', '已结束'].includes(String(data?.status || ''));
+  canvasReadOnlyRef.current = canvasReadOnly;
+  const canRenameName =
+    isTemplate || ['草稿', '已驳回'].includes(String(data?.status || ''));
+
+  const guardEditable = (action?: string) => {
+    if (!canvasReadOnlyRef.current) return true;
+    message.warning(
+      action
+        ? `当前状态「${dataRef.current?.status}」为只读，无法${action}`
+        : `当前状态「${dataRef.current?.status}」画布只读，不可修改流程`,
+    );
+    return false;
+  };
+
+  const openActivityInfo = () => {
+    setEditName(data?.name || '');
+    setInfoOpen(true);
+  };
+
+  const saveActivityInfo = async () => {
+    const name = editName.trim();
+    if (!name) {
+      message.warning('请填写活动名称');
+      return;
+    }
+    if (!canRenameName) {
+      message.warning(`当前状态「${data?.status}」不可修改活动名称`);
+      return;
+    }
+    if (isTemplate || !id) {
+      setData((prev: any) => ({ ...prev, name }));
+      message.success('已更新名称（演示）');
+      setInfoOpen(false);
+      return;
+    }
+    const res = await request<{ success: boolean; errorMessage?: string; data?: any }>(
+      `/api/crowd-marketing/activities/${id}`,
+      { method: 'PUT', data: { name } },
+    );
+    if (res?.success === false) {
+      message.error(res.errorMessage || '保存失败');
+      return;
+    }
+    setData(res.data || { ...data, name });
+    message.success('已更新活动名称');
+    setInfoOpen(false);
+  };
+
   const invalidateIfNeeded = async () => {
     if (isTemplate || !id) return;
     const status = dataRef.current?.status;
-    if (!['已通过', '进行中', '已暂停'].includes(status)) return;
+    /** 进行中已只读，仅已通过/已暂停改流程作废审批 */
+    if (!['已通过', '已暂停'].includes(status)) return;
     const res = await request<{ success: boolean; changed?: boolean; data?: any }>(
       `/api/crowd-marketing/activities/${id}/invalidate-approve`,
       { method: 'POST' },
@@ -839,166 +906,207 @@ const ActivityDesign: React.FC = () => {
             ],
       })}
     >
-      <div className="activity-canvas-shell">
+      <div className={`activity-canvas-shell${canvasReadOnly ? ' is-readonly' : ''}`}>
         <div className="activity-canvas-toolbar">
-          <Space wrap size={4}>
-            <Tag color={isTemplate ? 'processing' : statusTagColor(data?.status)} icon={<FormOutlined />}>
-              {isTemplate ? '模板设计' : data?.status || '设计中'}
-            </Tag>
-            <Typography.Text strong>
-              {data?.name || (isTemplate ? '营销活动模板' : '营销活动')}
-            </Typography.Text>
-            <Typography.Text type="secondary">ID：{data?.id || id}</Typography.Text>
-            {!isTemplate && data?.approver ? (
-              <Typography.Text type="secondary">审批人：{data.approver}</Typography.Text>
-            ) : null}
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              右侧圆点拖出连线（可一连多）· 「是否购买」出边自动标分支 · Delete 删除 · 双击配置
-            </Typography.Text>
-          </Space>
-          <div className="activity-canvas-actions">
-            <Button
-              type="text"
-              size="small"
-              onClick={tip(isTemplate ? '模板信息' : '活动信息')}
-            >
-              {isTemplate ? '模板信息' : '活动信息'}
-            </Button>
-            {!isTemplate ? (
-              <Button
-                type="text"
-                size="small"
-                icon={<SaveOutlined />}
-                onClick={() => {
-                  setSaveTplName(`${data?.name || '营销活动'}-模板`);
-                  setSaveTplOpen(true);
-                }}
+          <div className="activity-canvas-toolbar-meta">
+            <Space wrap size={8} align="center">
+              <Tag color={isTemplate ? 'processing' : statusTagColor(data?.status)}>
+                {isTemplate ? '模板设计' : data?.status || '设计中'}
+              </Tag>
+              {canvasReadOnly ? (
+                <Tag>只读</Tag>
+              ) : null}
+              <Typography.Text
+                strong
+                style={{ cursor: 'pointer' }}
+                onClick={openActivityInfo}
+                title={canRenameName ? '点击修改活动名称' : '查看活动信息'}
               >
-                保存为模板
-              </Button>
-            ) : null}
-            <Input.Search
-              size="small"
-              allowClear
-              placeholder="搜索节点"
-              style={{ width: 140 }}
-              onSearch={setNodeKeyword}
-            />
-            <Button
-              type="text"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={!selectedId && !selectedEdgeId}
-              onClick={() => (selectedEdgeId ? deleteEdge() : deleteNode())}
-            >
-              删除
-            </Button>
-            <Button type="text" size="small" onClick={tip('批量修改')}>
-              批量修改
-            </Button>
-            <Button type="text" size="small" icon={<UndoOutlined />} onClick={tip('撤销')} />
-            <Button type="text" size="small" icon={<RedoOutlined />} onClick={tip('恢复')} />
-            <Button type="text" size="small" onClick={tip('自动排版')}>
-              自动排版
-            </Button>
-            {!isTemplate ? (
-              <>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<PlayCircleOutlined />}
-                  onClick={handleTestRun}
-                >
-                  测试执行
-                </Button>
-                {canExecute && data?.status === '已通过' ? (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<CloudUploadOutlined />}
-                    onClick={handleFormalRun}
-                  >
-                    正式执行
-                  </Button>
-                ) : null}
-                {canExecute && data?.status === '已暂停' ? (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<CloudUploadOutlined />}
-                    onClick={handleFormalRun}
-                  >
-                    恢复执行
-                  </Button>
-                ) : null}
-                {data?.status === '进行中' ? (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<PauseCircleOutlined />}
-                    onClick={handlePause}
-                  >
-                    暂停
-                  </Button>
-                ) : null}
-                {['草稿', '已驳回'].includes(data?.status) ? (
-                  <Button type="text" size="small" onClick={handleSubmitApprove}>
-                    提交审批
-                  </Button>
-                ) : null}
-                {['进行中', '已暂停', '已结束'].includes(data?.status) ? (
-                  <Button
-                    type="text"
-                    size="small"
-                    onClick={() => history.push(`/crowd-marketing/activity/report/${id}`)}
-                  >
-                    执行结果
-                  </Button>
-                ) : null}
-              </>
-            ) : null}
-            <Space size={0}>
-              <Button
-                type="text"
-                size="small"
-                icon={<ZoomOutOutlined />}
-                onClick={() => setZoom((z) => Math.max(50, z - 10))}
-              />
-              <Dropdown
-                menu={{
-                  items: [50, 75, 100, 125, 150].map((v) => ({
-                    key: String(v),
-                    label: `${v}%`,
-                    onClick: () => setZoom(v),
-                  })),
-                }}
+                {data?.name || (isTemplate ? '营销活动模板' : '营销活动')}
+              </Typography.Text>
+              <Typography.Text type="secondary">ID：{data?.id || id}</Typography.Text>
+              {!isTemplate && data?.approver ? (
+                <Typography.Text type="secondary">审批人：{data.approver}</Typography.Text>
+              ) : null}
+              <Tooltip
+                title={
+                  canvasReadOnly
+                    ? `当前状态「${data?.status}」画布只读：可查看流程与执行相关操作，不可改节点/连线`
+                    : '右侧圆点拖出连线（可一连多）·「是否购买」出边自动标分支 · Delete 删除 · 双击配置节点'
+                }
               >
-                <Button type="text" size="small">
-                  {zoom}%
+                <Button type="text" size="small" icon={<QuestionCircleOutlined />}>
+                  操作说明
                 </Button>
-              </Dropdown>
-              <Button
-                type="text"
-                size="small"
-                icon={<ZoomInOutlined />}
-                onClick={() => setZoom((z) => Math.min(150, z + 10))}
-              />
-              <Tooltip title={fullscreen ? '退出全屏' : '全屏'}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={fullscreen ? <CompressOutlined /> : <ExpandOutlined />}
-                  onClick={() => setFullscreen((v) => !v)}
-                />
               </Tooltip>
             </Space>
+          </div>
+          <div className="activity-canvas-toolbar-actions">
+            <div className="activity-canvas-actions-left">
+              {!isTemplate ? (
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<SaveOutlined />}
+                  onClick={() => {
+                    setSaveTplName(`${data?.name || '营销活动'}-模板`);
+                    setSaveTplOpen(true);
+                  }}
+                >
+                  保存为模板
+                </Button>
+              ) : null}
+              <Input.Search
+                size="small"
+                allowClear
+                placeholder="搜索节点"
+                style={{ width: 160 }}
+                onSearch={setNodeKeyword}
+              />
+              <Button type="text" size="small" onClick={openActivityInfo}>
+                {isTemplate ? '模板信息' : '活动信息'}
+              </Button>
+              <Button type="text" size="small" icon={<UndoOutlined />} onClick={tip('撤销')}>
+                撤销
+              </Button>
+              <Button type="text" size="small" icon={<RedoOutlined />} onClick={tip('恢复')}>
+                恢复
+              </Button>
+              <Button type="text" size="small" onClick={tip('自动排版')}>
+                自动排版
+              </Button>
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'batch',
+                      label: '批量修改（演示）',
+                      onClick: tip('批量修改'),
+                    },
+                    {
+                      key: 'delete',
+                      label: '删除',
+                      danger: true,
+                      icon: <DeleteOutlined />,
+                      disabled: canvasReadOnly || (!selectedId && !selectedEdgeId),
+                      onClick: () => (selectedEdgeId ? deleteEdge() : deleteNode()),
+                    },
+                  ],
+                }}
+              >
+                <Button type="text" size="small" icon={<EllipsisOutlined />}>
+                  更多
+                </Button>
+              </Dropdown>
+            </div>
+            <div className="activity-canvas-actions-right">
+              {!isTemplate ? (
+                <>
+                  {!canvasReadOnly ? (
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<PlayCircleOutlined />}
+                      onClick={handleTestRun}
+                    >
+                      测试执行
+                    </Button>
+                  ) : null}
+                  {canExecute && data?.status === '已通过' ? (
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CloudUploadOutlined />}
+                      onClick={handleFormalRun}
+                    >
+                      正式执行
+                    </Button>
+                  ) : null}
+                  {canExecute && data?.status === '已暂停' ? (
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CloudUploadOutlined />}
+                      onClick={handleFormalRun}
+                    >
+                      恢复执行
+                    </Button>
+                  ) : null}
+                  {data?.status === '进行中' ? (
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<PauseCircleOutlined />}
+                      onClick={handlePause}
+                    >
+                      暂停
+                    </Button>
+                  ) : null}
+                  {['草稿', '已驳回'].includes(data?.status) ? (
+                    <Button type="text" size="small" onClick={handleSubmitApprove}>
+                      提交审批
+                    </Button>
+                  ) : null}
+                  {['进行中', '已暂停', '已结束'].includes(data?.status) ? (
+                    <Button
+                      type="text"
+                      size="small"
+                      onClick={() => history.push(`/crowd-marketing/activity/report/${id}`)}
+                    >
+                      执行结果
+                    </Button>
+                  ) : null}
+                </>
+              ) : null}
+              <Space size={0}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<ZoomOutOutlined />}
+                  onClick={() => setZoom((z) => Math.max(50, z - 10))}
+                />
+                <Dropdown
+                  menu={{
+                    items: [50, 75, 100, 125, 150].map((v) => ({
+                      key: String(v),
+                      label: `${v}%`,
+                      onClick: () => setZoom(v),
+                    })),
+                  }}
+                >
+                  <Button type="text" size="small">
+                    {zoom}%
+                  </Button>
+                </Dropdown>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<ZoomInOutlined />}
+                  onClick={() => setZoom((z) => Math.min(150, z + 10))}
+                />
+                <Tooltip title={fullscreen ? '退出全屏' : '全屏'}>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={fullscreen ? <CompressOutlined /> : <ExpandOutlined />}
+                    onClick={() => setFullscreen((v) => !v)}
+                  />
+                </Tooltip>
+              </Space>
+            </div>
           </div>
         </div>
 
         <div className="activity-canvas-body">
           <aside className="activity-canvas-toolbox">
-            <div className="toolbox-title">工具栏</div>
+            <div className="toolbox-title">
+              工具栏
+              {canvasReadOnly ? (
+                <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                  只读
+                </Typography.Text>
+              ) : null}
+            </div>
             <Input
               allowClear
               prefix={<SearchOutlined />}
@@ -1021,8 +1129,13 @@ const ActivityDesign: React.FC = () => {
                         key={item.key}
                         type="button"
                         className="toolbox-item"
+                        disabled={canvasReadOnly}
                         onClick={() => addNode(item)}
-                        title="点击添加到画布；若已选中节点会自动连线"
+                        title={
+                          canvasReadOnly
+                            ? '当前状态画布只读'
+                            : '点击添加到画布；若已选中节点会自动连线'
+                        }
                       >
                         <span className="toolbox-icon" style={{ color: item.color }}>
                           {item.icon}
@@ -1112,9 +1225,14 @@ const ActivityDesign: React.FC = () => {
                     }`}
                     style={{ left: node.x, top: node.y, ['--node-color' as string]: color }}
                     onMouseDown={(e) => onNodeMouseDown(e, node)}
-                    onDoubleClick={() => setConfigNode(node)}
+                    onDoubleClick={() => {
+                      if (canvasReadOnly) {
+                        message.info(`当前状态「${data?.status}」只读，可查看节点配置但不可保存修改`);
+                      }
+                      setConfigNode(node);
+                    }}
                   >
-                    {!isStart && selectedId === node.id ? (
+                    {!isStart && selectedId === node.id && !canvasReadOnly ? (
                       <button
                         type="button"
                         className="canvas-node-delete"
@@ -1133,7 +1251,7 @@ const ActivityDesign: React.FC = () => {
                     {!isStart && node.config ? (
                       <div className="canvas-node-desc">{node.config}</div>
                     ) : null}
-                    {node.type !== '结束' ? (
+                    {node.type !== '结束' && !canvasReadOnly ? (
                       <span
                         className="canvas-port canvas-port-out"
                         title="拖出连线（可一连多）"
@@ -1177,8 +1295,15 @@ const ActivityDesign: React.FC = () => {
         title={`配置节点 · ${configNode?.name || ''}`}
         open={!!configNode}
         onCancel={() => setConfigNode(null)}
+        okText={canvasReadOnly ? '关闭' : '确定'}
+        cancelButtonProps={canvasReadOnly ? { style: { display: 'none' } } : undefined}
         onOk={() => {
           if (configNode) {
+            if (canvasReadOnly) {
+              message.warning(`当前状态「${data?.status}」只读，未保存修改`);
+              setConfigNode(null);
+              return;
+            }
             if (configNode.type === '人群') {
               const source = configNode.meta?.audienceSource || 'crowd';
               if (source === 'crowd' && !configNode.meta?.crowdId) {
@@ -1476,6 +1601,50 @@ const ActivityDesign: React.FC = () => {
             </Form.Item>
           </Form>
         )}
+      </Modal>
+      <Modal
+        title={isTemplate ? '模板信息' : '活动信息'}
+        open={infoOpen}
+        onCancel={() => setInfoOpen(false)}
+        onOk={() => {
+          if (!canRenameName) {
+            setInfoOpen(false);
+            return;
+          }
+          return saveActivityInfo();
+        }}
+        okText={canRenameName ? '保存' : '关闭'}
+        cancelButtonProps={canRenameName ? undefined : { style: { display: 'none' } }}
+        destroyOnHidden
+      >
+        <Form layout="vertical">
+          <Form.Item label="活动名称" required={canRenameName}>
+            <Input
+              value={editName}
+              disabled={!canRenameName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="请输入活动名称"
+            />
+          </Form.Item>
+          {!isTemplate ? (
+            <>
+              <Form.Item label="活动 ID">
+                <Input value={data?.id || id} disabled />
+              </Form.Item>
+              <Form.Item label="状态">
+                <Input value={data?.status || '--'} disabled />
+              </Form.Item>
+              <Form.Item label="审批人">
+                <Input value={data?.approver || '--'} disabled />
+              </Form.Item>
+            </>
+          ) : null}
+          {!canRenameName ? (
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              仅「草稿 / 已驳回」可修改活动名称；当前为只读查看。
+            </Typography.Paragraph>
+          ) : null}
+        </Form>
       </Modal>
       {!isTemplate ? (
         <Modal

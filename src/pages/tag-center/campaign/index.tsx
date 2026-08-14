@@ -17,7 +17,6 @@ import {
 } from '@/components/Tagging';
 import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
-import { goDataTagCreate } from '../utils/dataTagCreate';
 
 type CampaignItem = {
   id: string;
@@ -63,12 +62,14 @@ const CampaignTaggingPage: React.FC = () => {
   const { getCatalog } = useTagCatalog();
   const catalog = getCatalog('campaign');
   const actionRef = useRef<ActionType | null>(null);
+  const [pageInfo, setPageInfo] = useState({ current: 1, pageSize: 10 });
   const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
   const [selectedRows, setSelectedRows] = useState<CampaignItem[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerRow, setPickerRow] = useState<CampaignItem | null>(null);
+  const [pickerRows, setPickerRows] = useState<CampaignItem[]>([]);
   const [pickerValue, setPickerValue] = useState<TagItem[]>([]);
+  const [pickerMode, setPickerMode] = useState<'replace' | 'append'>('replace');
 
   const getTags = (row: CampaignItem) => tagOverrides[row.id] || row.tags || seedTags(row);
 
@@ -82,9 +83,11 @@ const CampaignTaggingPage: React.FC = () => {
     return n;
   };
 
-  const openTagPicker = (row: CampaignItem) => {
-    setPickerRow(row);
-    setPickerValue(getTags(row));
+  const openTagPicker = (rows: CampaignItem[], mode: 'replace' | 'append') => {
+    if (!rows.length) return;
+    setPickerRows(rows);
+    setPickerMode(mode);
+    setPickerValue(mode === 'replace' ? getTags(rows[0]) : []);
     setPickerOpen(true);
   };
 
@@ -122,6 +125,13 @@ const CampaignTaggingPage: React.FC = () => {
       hideInTable: true,
       valueType: 'select',
       valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
+    },
+    {
+      title: '序号',
+      dataIndex: 'index',
+      search: false,
+      width: 64,
+      render: (_, __, index) => (pageInfo.current - 1) * pageInfo.pageSize + index + 1,
     },
     { title: '活动名称', dataIndex: 'name', search: false },
     { title: '活动ID', dataIndex: 'id', search: false, width: 100 },
@@ -165,7 +175,7 @@ const CampaignTaggingPage: React.FC = () => {
           tags={getTags(row)}
           catalog={catalog}
           emptyText="点击打标"
-          onClick={() => openTagPicker(row)}
+          onClick={() => openTagPicker([row], 'replace')}
         />
       ),
     },
@@ -175,10 +185,7 @@ const CampaignTaggingPage: React.FC = () => {
       search: false,
       width: 120,
       render: (_, row) => [
-        <a
-          key="tag"
-          onClick={() => goDataTagCreate('campaign', [{ id: row.id, name: row.name }])}
-        >
+        <a key="tag" onClick={() => openTagPicker([row], 'replace')}>
           打标
         </a>,
         <a key="view" onClick={() => history.push(`/tag-center/campaign/view/${row.id}`)}>
@@ -194,14 +201,20 @@ const CampaignTaggingPage: React.FC = () => {
         headerTitle={
           <TitleWithTip
             title="专题活动 · 打标"
-            tip="「专题活动」是可打标的活动主数据；自动化流程请到「营销管理 · 营销活动」画布。"
+            tip="专题活动标签可在本页直接手动打标；自动化流程请到「营销管理 · 营销活动」画布。"
           />
         }
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         search={listSearchProps}
-        pagination={listPagination}
+        pagination={{
+          ...listPagination,
+          current: pageInfo.current,
+          pageSize: pageInfo.pageSize,
+          onChange: (current: number, pageSize: number) =>
+            setPageInfo({ current, pageSize: pageSize || pageInfo.pageSize }),
+        } as any}
         rowSelection={{ onChange: (_, rows) => setSelectedRows(rows) }}
         toolBarRender={() => [
           <Button key="lib" onClick={() => setLibraryOpen(true)}>
@@ -211,12 +224,7 @@ const CampaignTaggingPage: React.FC = () => {
             key="batchTag"
             type="primary"
             disabled={!selectedRows.length}
-            onClick={() =>
-              goDataTagCreate(
-                'campaign',
-                selectedRows.map((r) => ({ id: r.id, name: r.name })),
-              )
-            }
+            onClick={() => openTagPicker(selectedRows, 'append')}
           >
             批量打标{selectedRows.length ? `（${selectedRows.length}）` : ''}
           </Button>,
@@ -276,13 +284,30 @@ const CampaignTaggingPage: React.FC = () => {
       <TagPickerModal
         open={pickerOpen}
         onOpenChange={setPickerOpen}
-        title={`打标签 · ${pickerRow?.name || ''}`}
+        title={
+          pickerRows.length > 1
+            ? `批量打标 · ${pickerRows.length} 个活动`
+            : `打标签 · ${pickerRows[0]?.name || ''}`
+        }
         catalog={catalog}
-        mode="replace"
+        mode={pickerMode}
         value={pickerValue}
         onSave={(next) => {
-          if (!pickerRow) return;
-          setTagOverrides((prev) => ({ ...prev, [pickerRow.id]: next }));
+          if (!pickerRows.length) return;
+          setTagOverrides((prev) => {
+            const copy = { ...prev };
+            pickerRows.forEach((row) => {
+              if (pickerMode === 'append') {
+                const map = new Map<string, TagItem>();
+                getTags(row).forEach((t) => map.set(tagKey(t), t));
+                next.forEach((t) => map.set(tagKey(t), t));
+                copy[row.id] = Array.from(map.values());
+              } else {
+                copy[row.id] = next;
+              }
+            });
+            return copy;
+          });
         }}
       />
     </PageContainer>

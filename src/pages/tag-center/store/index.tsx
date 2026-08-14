@@ -17,7 +17,6 @@ import {
 } from '@/components/Tagging';
 import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
-import { goDataTagCreate } from '../utils/dataTagCreate';
 
 type StoreItem = {
   id: string;
@@ -62,12 +61,14 @@ const StoreTaggingPage: React.FC = () => {
   const { getCatalog } = useTagCatalog();
   const catalog = getCatalog('store');
   const actionRef = useRef<ActionType | null>(null);
+  const [pageInfo, setPageInfo] = useState({ current: 1, pageSize: 10 });
   const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
   const [selectedRows, setSelectedRows] = useState<StoreItem[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerRow, setPickerRow] = useState<StoreItem | null>(null);
+  const [pickerRows, setPickerRows] = useState<StoreItem[]>([]);
   const [pickerValue, setPickerValue] = useState<TagItem[]>([]);
+  const [pickerMode, setPickerMode] = useState<'replace' | 'append'>('replace');
 
   const getTags = (row: StoreItem) => tagOverrides[row.id] || row.tags || seedTags(row);
 
@@ -81,9 +82,11 @@ const StoreTaggingPage: React.FC = () => {
     return n;
   };
 
-  const openTagPicker = (row: StoreItem) => {
-    setPickerRow(row);
-    setPickerValue(getTags(row));
+  const openTagPicker = (rows: StoreItem[], mode: 'replace' | 'append') => {
+    if (!rows.length) return;
+    setPickerRows(rows);
+    setPickerMode(mode);
+    setPickerValue(mode === 'replace' ? getTags(rows[0]) : []);
     setPickerOpen(true);
   };
 
@@ -123,6 +126,13 @@ const StoreTaggingPage: React.FC = () => {
       valueType: 'select',
       valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
     },
+    {
+      title: '序号',
+      dataIndex: 'index',
+      search: false,
+      width: 64,
+      render: (_, __, index) => (pageInfo.current - 1) * pageInfo.pageSize + index + 1,
+    },
     { title: '店铺名称', dataIndex: 'name', search: false },
     { title: '店铺ID', dataIndex: 'storeId', search: false, width: 100 },
     { title: '平台', dataIndex: 'platform', search: false },
@@ -161,7 +171,7 @@ const StoreTaggingPage: React.FC = () => {
           tags={getTags(row)}
           catalog={catalog}
           emptyText="点击打标"
-          onClick={() => openTagPicker(row)}
+          onClick={() => openTagPicker([row], 'replace')}
         />
       ),
     },
@@ -171,10 +181,7 @@ const StoreTaggingPage: React.FC = () => {
       search: false,
       width: 120,
       render: (_, row) => [
-        <a
-          key="tag"
-          onClick={() => goDataTagCreate('store', [{ id: row.id, name: row.name }])}
-        >
+        <a key="tag" onClick={() => openTagPicker([row], 'replace')}>
           打标
         </a>,
         <a key="view" onClick={() => history.push(`/tag-center/store/view/${row.id}`)}>
@@ -190,14 +197,20 @@ const StoreTaggingPage: React.FC = () => {
         headerTitle={
           <TitleWithTip
             title="店铺数据 · 打标"
-            tip="店铺标签用于圈人条件（如「曾在自营重点店下单」），结果永远是人包。"
+            tip="店铺标签可在本页直接手动打标，用于圈人条件（如「曾在自营重点店下单」）。"
           />
         }
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         search={listSearchProps}
-        pagination={listPagination}
+        pagination={{
+          ...listPagination,
+          current: pageInfo.current,
+          pageSize: pageInfo.pageSize,
+          onChange: (current: number, pageSize: number) =>
+            setPageInfo({ current, pageSize: pageSize || pageInfo.pageSize }),
+        } as any}
         rowSelection={{ onChange: (_, rows) => setSelectedRows(rows) }}
         toolBarRender={() => [
           <Button key="lib" onClick={() => setLibraryOpen(true)}>
@@ -207,12 +220,7 @@ const StoreTaggingPage: React.FC = () => {
             key="batchTag"
             type="primary"
             disabled={!selectedRows.length}
-            onClick={() =>
-              goDataTagCreate(
-                'store',
-                selectedRows.map((r) => ({ id: r.id, name: r.name })),
-              )
-            }
+            onClick={() => openTagPicker(selectedRows, 'append')}
           >
             批量打标{selectedRows.length ? `（${selectedRows.length}）` : ''}
           </Button>,
@@ -242,7 +250,11 @@ const StoreTaggingPage: React.FC = () => {
             data = data.filter((x) =>
               (x.centers?.length
                 ? x.centers
-                : [MARKETING_CENTERS[Number(String(x.id).replace(/\D/g, '') || 0) % MARKETING_CENTERS.length]]
+                : [
+                    MARKETING_CENTERS[
+                      Number(String(x.id).replace(/\D/g, '') || 0) % MARKETING_CENTERS.length
+                    ],
+                  ]
               ).includes(String(params.centerSearch)),
             );
           }
@@ -278,13 +290,30 @@ const StoreTaggingPage: React.FC = () => {
       <TagPickerModal
         open={pickerOpen}
         onOpenChange={setPickerOpen}
-        title={`打标签 · ${pickerRow?.name || ''}`}
+        title={
+          pickerRows.length > 1
+            ? `批量打标 · ${pickerRows.length} 个店铺`
+            : `打标签 · ${pickerRows[0]?.name || ''}`
+        }
         catalog={catalog}
-        mode="replace"
+        mode={pickerMode}
         value={pickerValue}
         onSave={(next) => {
-          if (!pickerRow) return;
-          setTagOverrides((prev) => ({ ...prev, [pickerRow.id]: next }));
+          if (!pickerRows.length) return;
+          setTagOverrides((prev) => {
+            const copy = { ...prev };
+            pickerRows.forEach((row) => {
+              if (pickerMode === 'append') {
+                const map = new Map<string, TagItem>();
+                getTags(row).forEach((t) => map.set(tagKey(t), t));
+                next.forEach((t) => map.set(tagKey(t), t));
+                copy[row.id] = Array.from(map.values());
+              } else {
+                copy[row.id] = next;
+              }
+            });
+            return copy;
+          });
         }}
       />
     </PageContainer>

@@ -9,7 +9,6 @@ import {
   FormattedMessage,
   Helmet,
   history,
-  SelectLang,
   useIntl,
   useModel,
 } from '@umijs/max';
@@ -46,19 +45,8 @@ const getSafeRedirectUrl = (redirect: string | null): string => {
   }
 };
 
-const useStyles = createStyles(({ token }) => {
+const useStyles = createStyles(() => {
   return {
-    lang: {
-      width: 42,
-      height: 42,
-      lineHeight: '42px',
-      position: 'fixed',
-      right: 16,
-      borderRadius: token.borderRadius,
-      ':hover': {
-        backgroundColor: token.colorBgTextHover,
-      },
-    },
     container: {
       display: 'flex',
       flexDirection: 'column',
@@ -70,16 +58,6 @@ const useStyles = createStyles(({ token }) => {
     },
   };
 });
-
-const Lang = () => {
-  const { styles } = useStyles();
-
-  return (
-    <div className={styles.lang} data-lang>
-      {SelectLang && <SelectLang />}
-    </div>
-  );
-};
 
 const LoginMessage: React.FC<{
   content: string;
@@ -162,7 +140,6 @@ const Login: React.FC = () => {
           {Settings.title && ` - ${Settings.title}`}
         </title>
       </Helmet>
-      <Lang />
       <div
         style={{
           flex: '1',

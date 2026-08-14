@@ -23,7 +23,6 @@ import {
 } from '@/components/Tagging';
 import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
-import { goDataTagCreate } from '../utils/dataTagCreate';
 
 type ProductItem = {
   id: string;
@@ -51,6 +50,7 @@ const ProductTaggingPage: React.FC = () => {
   const { getCatalog } = useTagCatalog();
   const catalog = getCatalog('product');
   const actionRef = useRef<ActionType | null>(null);
+  const [pageInfo, setPageInfo] = useState({ current: 1, pageSize: 10 });
   const [summary, setSummary] = useState({
     productCount: 0,
     skuCount: 0,
@@ -61,8 +61,9 @@ const ProductTaggingPage: React.FC = () => {
   const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerRow, setPickerRow] = useState<ProductItem | null>(null);
+  const [pickerRows, setPickerRows] = useState<ProductItem[]>([]);
   const [pickerValue, setPickerValue] = useState<TagItem[]>([]);
+  const [pickerMode, setPickerMode] = useState<'replace' | 'append'>('replace');
 
   useEffect(() => {
     request('/api/customer-asset/products/summary').then((res) => {
@@ -94,9 +95,11 @@ const ProductTaggingPage: React.FC = () => {
     return n;
   };
 
-  const openTagPicker = (row: ProductItem) => {
-    setPickerRow(row);
-    setPickerValue(getTags(row));
+  const openTagPicker = (rows: ProductItem[], mode: 'replace' | 'append') => {
+    if (!rows.length) return;
+    setPickerRows(rows);
+    setPickerMode(mode);
+    setPickerValue(mode === 'replace' ? getTags(rows[0]) : []);
     setPickerOpen(true);
   };
 
@@ -146,6 +149,13 @@ const ProductTaggingPage: React.FC = () => {
         placeholder: '按已打标签筛选',
       },
     },
+    {
+      title: '序号',
+      dataIndex: 'index',
+      search: false,
+      width: 64,
+      render: (_, __, index) => (pageInfo.current - 1) * pageInfo.pageSize + index + 1,
+    },
     { title: '商品名称', dataIndex: 'name', search: false },
     { title: 'SKU', dataIndex: 'sku', search: false },
     { title: '平台', dataIndex: 'platform', search: false },
@@ -182,7 +192,7 @@ const ProductTaggingPage: React.FC = () => {
           tags={getTags(row)}
           catalog={catalog}
           emptyText="点击打标"
-          onClick={() => openTagPicker(row)}
+          onClick={() => openTagPicker([row], 'replace')}
         />
       ),
     },
@@ -193,10 +203,7 @@ const ProductTaggingPage: React.FC = () => {
       search: false,
       width: 120,
       render: (_, row) => [
-        <a
-          key="tag"
-          onClick={() => goDataTagCreate('product', [{ id: row.id, name: row.name }])}
-        >
+        <a key="tag" onClick={() => openTagPicker([row], 'replace')}>
           打标
         </a>,
         <a key="view" onClick={() => history.push(`/tag-center/product/view/${row.id}`)}>
@@ -218,14 +225,20 @@ const ProductTaggingPage: React.FC = () => {
         headerTitle={
           <TitleWithTip
             title="商品数据 · 打标"
-            tip="商品标签像贴纸：点色块贴上；可用于人群工坊圈选「买过某类商品」的人。"
+            tip="商品标签可在本页直接手动打标，用于人群工坊圈选「买过某类商品」的人。"
           />
         }
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         search={listSearchProps}
-        pagination={listPagination}
+        pagination={{
+          ...listPagination,
+          current: pageInfo.current,
+          pageSize: pageInfo.pageSize,
+          onChange: (current: number, pageSize: number) =>
+            setPageInfo({ current, pageSize: pageSize || pageInfo.pageSize }),
+        } as any}
         rowSelection={{ onChange: (_, rows) => setSelectedRows(rows) }}
         toolBarRender={() => [
           <Button key="lib" onClick={() => setLibraryOpen(true)}>
@@ -235,12 +248,7 @@ const ProductTaggingPage: React.FC = () => {
             key="batchTag"
             type="primary"
             disabled={!selectedRows.length}
-            onClick={() =>
-              goDataTagCreate(
-                'product',
-                selectedRows.map((r) => ({ id: r.id, name: r.name })),
-              )
-            }
+            onClick={() => openTagPicker(selectedRows, 'append')}
           >
             批量打标{selectedRows.length ? `（${selectedRows.length}）` : ''}
           </Button>,
@@ -301,13 +309,30 @@ const ProductTaggingPage: React.FC = () => {
       <TagPickerModal
         open={pickerOpen}
         onOpenChange={setPickerOpen}
-        title={`打标签 · ${pickerRow?.name || ''}`}
+        title={
+          pickerRows.length > 1
+            ? `批量打标 · ${pickerRows.length} 个商品`
+            : `打标签 · ${pickerRows[0]?.name || ''}`
+        }
         catalog={catalog}
-        mode="replace"
+        mode={pickerMode}
         value={pickerValue}
         onSave={(next) => {
-          if (!pickerRow) return;
-          setTagOverrides((prev) => ({ ...prev, [pickerRow.id]: next }));
+          if (!pickerRows.length) return;
+          setTagOverrides((prev) => {
+            const copy = { ...prev };
+            pickerRows.forEach((row) => {
+              if (pickerMode === 'append') {
+                const map = new Map<string, TagItem>();
+                getTags(row).forEach((t) => map.set(tagKey(t), t));
+                next.forEach((t) => map.set(tagKey(t), t));
+                copy[row.id] = Array.from(map.values());
+              } else {
+                copy[row.id] = next;
+              }
+            });
+            return copy;
+          });
         }}
       />
     </PageContainer>

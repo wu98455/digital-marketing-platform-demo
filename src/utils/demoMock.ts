@@ -13,6 +13,13 @@ import {
 } from './systemAdminStore';
 
 const AUTH_KEY = 'antd-prototype-demo-auth';
+const PROFILE_KEY = 'dmp-account-profile-v1';
+
+type AccountProfile = {
+  email?: string;
+  phone?: string;
+  signature?: string;
+};
 
 const tableData: API.RuleListItem[] = Array.from({ length: 20 }).map(
   (_, index) => ({
@@ -53,9 +60,40 @@ export function clearDemoAuth() {
   localStorage.removeItem(AUTH_KEY);
 }
 
+function readProfiles(): Record<string, AccountProfile> {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeProfiles(map: Record<string, AccountProfile>) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(map));
+}
+
+function getAccountProfile(username: string): AccountProfile {
+  return readProfiles()[username] || {};
+}
+
+export function saveAccountProfile(
+  username: string,
+  patch: AccountProfile,
+): AccountProfile {
+  const map = readProfiles();
+  const next = { ...(map[username] || {}), ...patch };
+  map[username] = next;
+  writeProfiles(map);
+  return next;
+}
+
 function toCurrentUser(username: string): API.CurrentUser {
   const user = findUserByUsername(username);
   const role = user ? getRoleById(user.roleId) : getRoleById('admin');
+  const profile = getAccountProfile(username);
   const access =
     user?.roleId === 'admin' ? 'admin' : user?.roleId === 'tagger' ? 'tagger' : 'marketer';
   return {
@@ -63,17 +101,16 @@ function toCurrentUser(username: string): API.CurrentUser {
     avatar:
       'https://gw.alipayobjects.com/zos/antfincdn/XAosXuNZyF/BiazfanxmamNRoxxVxka.png',
     userid: user?.id || '00000001',
-    email: `${username}@marketing.local`,
-    signature: role.description,
-    title: role.name,
+    email: profile.email || `${username}@marketing.local`,
+    signature: profile.signature || role?.description || '',
+    title: role?.name || '用户',
     group: '数字营销平台',
-    tags: [{ key: '0', label: role.name }],
+    tags: role?.name ? [{ key: '0', label: role.name }] : [],
     notifyCount: 12,
     unreadCount: 11,
     country: 'China',
     access,
-    phone: '0752-268888888',
-    // 扩展字段：活动侧读 username
+    phone: profile.phone || '13800000000',
     username: user?.username || username,
     roleId: user?.roleId || 'admin',
   } as API.CurrentUser;
@@ -187,6 +224,67 @@ export async function demoOutLogin() {
   if (username) appendAudit(username, '退出登录');
   clearDemoAuth();
   return { data: {}, success: true };
+}
+
+/** 更新当前用户基本资料（姓名写回用户表，联系信息本地持久化） */
+export async function demoUpdateProfile(input: {
+  name?: string;
+  email?: string;
+  phone?: string;
+  signature?: string;
+}): Promise<{ success: boolean; data?: API.CurrentUser; errorMessage?: string }> {
+  const username = getDemoUsername();
+  if (!username) return { success: false, errorMessage: '请先登录' };
+  const user = findUserByUsername(username);
+  if (!user) return { success: false, errorMessage: '用户不存在' };
+
+  const name = String(input.name || '').trim();
+  if (!name) return { success: false, errorMessage: '请填写姓名' };
+
+  const list = getUsers();
+  const idx = list.findIndex((u) => u.id === user.id);
+  if (idx >= 0) {
+    const copy = [...list];
+    copy[idx] = { ...copy[idx], name };
+    saveUsers(copy);
+  }
+
+  saveAccountProfile(username, {
+    email: String(input.email || '').trim() || undefined,
+    phone: String(input.phone || '').trim() || undefined,
+    signature: String(input.signature || '').trim() || undefined,
+  });
+  appendAudit(username, '更新个人资料');
+  return { success: true, data: toCurrentUser(username) };
+}
+
+/** 修改当前登录密码 */
+export async function demoChangePassword(input: {
+  oldPassword: string;
+  newPassword: string;
+}): Promise<{ success: boolean; errorMessage?: string }> {
+  const username = getDemoUsername();
+  if (!username) return { success: false, errorMessage: '请先登录' };
+  const user = findUserByUsername(username);
+  if (!user) return { success: false, errorMessage: '用户不存在' };
+  if (user.password !== input.oldPassword) {
+    return { success: false, errorMessage: '当前密码不正确' };
+  }
+  const nextPwd = String(input.newPassword || '');
+  if (nextPwd.length < 6) {
+    return { success: false, errorMessage: '新密码至少 6 位' };
+  }
+  if (nextPwd === input.oldPassword) {
+    return { success: false, errorMessage: '新密码不能与当前密码相同' };
+  }
+  const list = getUsers();
+  const idx = list.findIndex((u) => u.id === user.id);
+  if (idx < 0) return { success: false, errorMessage: '用户不存在' };
+  const copy = [...list];
+  copy[idx] = { ...copy[idx], password: nextPwd };
+  saveUsers(copy);
+  appendAudit(username, '修改登录密码');
+  return { success: true };
 }
 
 export async function demoRule(params: {

@@ -34,13 +34,36 @@
 
 .activity-canvas-toolbar {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.activity-canvas-toolbar-meta {
+  min-height: 28px;
+}
+
+.activity-canvas-toolbar-actions {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
+}
+
+.activity-canvas-actions-left,
+.activity-canvas-actions-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.activity-canvas-shell.is-readonly .toolbox-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .activity-canvas-actions {

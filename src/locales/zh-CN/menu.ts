@@ -11,7 +11,6 @@ export default {
   'menu.tag-center.tag-center-campaign': '专题活动',
   'menu.tag-center.tag-center-campaign-view': '专题活动详情',
   'menu.tag-center.tag-create': '新建标签',
-  'menu.tag-center.tag-data-create': '新建标签',
   'menu.tag-center.tag-edit': '编辑标签',
   'menu.tag-center.tag-detail': '标签详情',
   'menu.tag-center.customer-view': '人员详情',
@@ -49,5 +48,8 @@ export default {
   'menu.system.menus': '菜单管理',
   'menu.system.audit': '操作日志',
   'menu.system.org': '组织架构',
+  'menu.account': '个人中心',
+  'menu.account.account-settings': '个人设置',
+  'menu.account.account-center': '个人中心',
   'menu.account.logout': '退出登录',
 };

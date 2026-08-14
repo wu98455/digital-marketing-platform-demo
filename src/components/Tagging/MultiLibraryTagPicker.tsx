@@ -11,14 +11,13 @@ import type { CatalogKind } from './TagCatalogContext';
 import { useTagCatalog } from './TagCatalogContext';
 import type { TagGroup, TagItem } from './types';
 
-/** 与侧栏「数据打标」五个列表对齐 */
+/** 与侧栏「数据打标」对齐：人群标签 + 店/品/活动主数据（不含人员数据手动库） */
 export const TAG_LIBRARY_TABS: {
   key: string;
   label: string;
   kind: CatalogKind;
 }[] = [
   { key: 'person', label: '人群标签', kind: 'customer' },
-  { key: 'customer', label: '人员数据', kind: 'customer' },
   { key: 'store', label: '店铺数据', kind: 'store' },
   { key: 'product', label: '商品数据', kind: 'product' },
   { key: 'campaign', label: '专题活动', kind: 'campaign' },

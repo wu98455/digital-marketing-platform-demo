@@ -7,12 +7,7 @@ import CenterTags from '@/components/CenterTags';
 import TitleWithTip from '@/components/TitleWithTip';
 import {
   TagChips,
-  TagLibraryDrawer,
-  TagPickerModal,
   flattenGroups,
-  remapTagInOverrides,
-  removeTagFromOverrides,
-  tagKey,
   useTagCatalog,
   type TagItem,
 } from '@/components/Tagging';
@@ -20,7 +15,6 @@ import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
 import RegionSelectModal from '@/pages/customer-asset/customer-list/components/RegionSelectModal';
 import StoreSelectModal from '@/pages/customer-asset/customer-list/components/StoreSelectModal';
-import { goDataTagCreate } from '../utils/dataTagCreate';
 
 export type CustomerItem = {
   id: string;
@@ -49,6 +43,7 @@ const seedCenters = (id: string): string[] => {
   return [MARKETING_CENTERS[n % MARKETING_CENTERS.length]];
 };
 
+/** 人员标签只读展示，来源于人群标签规则命中（演示种子） */
 const seedTags = (id: string): TagItem[] => {
   const n = Number(String(id).replace(/\D/g, '') || 0);
   if (n % 5 === 0) return [];
@@ -76,56 +71,26 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
   const resolvedTitle =
     headerTitle ||
     (location.pathname.startsWith('/tag-center/customer') ? '人员数据' : '会员标签');
-  const titleTip = '本页支持查看人员标签与打标。';
+  const titleTip = '人员标签由人群标签规则命中产生，本页仅查看，不可手动打标。';
   const { getCatalog } = useTagCatalog();
   const catalog = getCatalog('customer');
   const actionRef = useRef<ActionType | null>(null);
+  const [pageInfo, setPageInfo] = useState({ current: 1, pageSize: 10 });
   const [storeOpen, setStoreOpen] = useState(false);
   const [selectedStores, setSelectedStores] = useState<{ id: string; name: string }[]>([]);
   const [regionOpen, setRegionOpen] = useState(false);
   const [selectedRegions, setSelectedRegions] = useState<{ code: string; name: string }[]>([]);
-  const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
-  const [selectedRows, setSelectedRows] = useState<CustomerItem[]>([]);
-  const [libraryOpen, setLibraryOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerRow, setPickerRow] = useState<CustomerItem | null>(null);
-  const [pickerValue, setPickerValue] = useState<TagItem[]>([]);
 
   const viewBase = location.pathname.startsWith('/tag-center')
     ? '/tag-center/customer'
     : '/customer-asset/customer-list';
 
   const getTags = (row: CustomerItem): TagItem[] => {
-    if (tagOverrides[row.id]) return tagOverrides[row.id];
     if (row.tagInstances?.length) {
       return row.tagInstances.map((t) => ({ group: t.group, tag: t.tag }));
     }
     if (row.tags?.length) return flattenGroups(row.tags);
     return seedTags(row.id);
-  };
-
-  const getTagSourceHint = (row: CustomerItem) => {
-    const list = row.tagInstances || [];
-    if (!list.length) return '';
-    const sources = Array.from(new Set(list.map((t) => t.source).filter(Boolean)));
-    return sources.slice(0, 2).join('、');
-  };
-
-  const countUsage = (item: TagItem) => {
-    const key = tagKey(item);
-    let n = 0;
-    for (let i = 1; i <= 48; i += 1) {
-      const id = `c${i}`;
-      const tags = tagOverrides[id] || seedTags(id);
-      if (tags.some((t) => tagKey(t) === key)) n += 1;
-    }
-    return n;
-  };
-
-  const openTagPicker = (row: CustomerItem) => {
-    setPickerRow(row);
-    setPickerValue(getTags(row));
-    setPickerOpen(true);
   };
 
   const tagFilterOptions = useMemo(
@@ -212,23 +177,19 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
       },
     },
     {
+      title: '序号',
+      dataIndex: 'index',
+      search: false,
+      width: 64,
+      render: (_, __, index) => (pageInfo.current - 1) * pageInfo.pageSize + index + 1,
+    },
+    {
       title: '人员 OneID',
       dataIndex: 'oneId',
       search: false,
       width: 150,
-      render: (_, row) => {
-        const oneId =
-          row.oneId || `OID20260812${String(row.id).replace(/\D/g, '').padStart(4, '0')}`;
-        return (
-          <Button
-            type="link"
-            style={{ padding: 0 }}
-            onClick={() => history.push(`${viewBase}/view/${row.id}`)}
-          >
-            {oneId}
-          </Button>
-        );
-      },
+      render: (_, row) =>
+        row.oneId || `OID20260812${String(row.id).replace(/\D/g, '').padStart(4, '0')}`,
     },
     {
       title: '姓名',
@@ -272,7 +233,9 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
       dataIndex: 'centers',
       search: false,
       width: 180,
-      render: (_, row) => <CenterTags centers={row.centers?.length ? row.centers : seedCenters(row.id)} />,
+      render: (_, row) => (
+        <CenterTags centers={row.centers?.length ? row.centers : seedCenters(row.id)} />
+      ),
     },
     {
       title: '标签',
@@ -280,37 +243,15 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
       search: false,
       width: 280,
       render: (_, row) => (
-        <Space direction="vertical" size={0}>
-          <TagChips
-            tags={getTags(row)}
-            catalog={catalog}
-            emptyText="点击打标"
-            onClick={() => openTagPicker(row)}
-          />
-          {getTagSourceHint(row) ? (
-            <span style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>
-              来源：{getTagSourceHint(row)}
-            </span>
-          ) : null}
-        </Space>
+        <TagChips tags={getTags(row)} catalog={catalog} emptyText="暂无标签" />
       ),
     },
     {
       title: '操作',
       valueType: 'option',
       search: false,
-      width: 120,
+      width: 80,
       render: (_, row) => [
-        <a
-          key="tag"
-          onClick={() =>
-            goDataTagCreate('customer', [
-              { id: row.id, name: row.name || row.customerIdMasked },
-            ])
-          }
-        >
-          打标
-        </a>,
         <a key="view" onClick={() => history.push(`${viewBase}/view/${row.id}`)}>
           详情
         </a>,
@@ -326,30 +267,14 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
         rowKey="id"
         columns={columns}
         search={listSearchProps}
-        pagination={listPagination}
-        rowSelection={{
-          onChange: (_, rows) => setSelectedRows(rows),
-        }}
+        pagination={{
+          ...listPagination,
+          current: pageInfo.current,
+          pageSize: pageInfo.pageSize,
+          onChange: (current: number, pageSize: number) =>
+            setPageInfo({ current, pageSize: pageSize || pageInfo.pageSize }),
+        } as any}
         toolBarRender={() => [
-          <Button key="lib" onClick={() => setLibraryOpen(true)}>
-            标签管理
-          </Button>,
-          <Button
-            key="batchTag"
-            type="primary"
-            disabled={!selectedRows.length}
-            onClick={() =>
-              goDataTagCreate(
-                'customer',
-                selectedRows.map((r) => ({
-                  id: r.id,
-                  name: r.name || r.customerIdMasked,
-                })),
-              )
-            }
-          >
-            批量打标{selectedRows.length ? `（${selectedRows.length}）` : ''}
-          </Button>,
           <Space key="store">
             {selectedStores.length > 0 && (
               <span style={{ color: 'rgba(0,0,0,0.45)' }}>
@@ -403,46 +328,6 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
           setSelectedRegions(rows);
           setRegionOpen(false);
           actionRef.current?.reload();
-        }}
-      />
-      <TagLibraryDrawer
-        open={libraryOpen}
-        onOpenChange={setLibraryOpen}
-        kind="customer"
-        countUsage={countUsage}
-        onRenameApply={(from, to) => {
-          setTagOverrides((prev) => {
-            const base: Record<string, TagItem[]> = { ...prev };
-            for (let i = 1; i <= 48; i += 1) {
-              const id = `c${i}`;
-              if (!base[id]) base[id] = seedTags(id);
-            }
-            return remapTagInOverrides(base, from, to);
-          });
-          actionRef.current?.reload();
-        }}
-        onDeleteApply={(item) => {
-          setTagOverrides((prev) => {
-            const base: Record<string, TagItem[]> = { ...prev };
-            for (let i = 1; i <= 48; i += 1) {
-              const id = `c${i}`;
-              if (!base[id]) base[id] = seedTags(id);
-            }
-            return removeTagFromOverrides(base, item);
-          });
-          actionRef.current?.reload();
-        }}
-      />
-      <TagPickerModal
-        open={pickerOpen}
-        onOpenChange={setPickerOpen}
-        title={`打标签 · ${pickerRow?.name || pickerRow?.customerIdMasked || ''}`}
-        catalog={catalog}
-        mode="replace"
-        value={pickerValue}
-        onSave={(next) => {
-          if (!pickerRow) return;
-          setTagOverrides((prev) => ({ ...prev, [pickerRow.id]: next }));
         }}
       />
     </PageContainer>

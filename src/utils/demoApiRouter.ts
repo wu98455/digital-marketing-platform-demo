@@ -1462,6 +1462,22 @@ const routes: RouteDef[] = [
     },
   },
   {
+    method: 'PUT',
+    path: '/api/crowd-marketing/activities/:id',
+    handler: ({ pathParams, data }) => {
+      const item = findActivityRow(pathParams.id);
+      if (!item) return { success: false, errorMessage: '活动不存在' };
+      const body = (data || {}) as any;
+      if (!['草稿', '已驳回'].includes(item.status)) {
+        return { success: false, errorMessage: `当前状态「${item.status}」不可修改活动信息` };
+      }
+      const name = String(body.name || '').trim();
+      if (!name) return { success: false, errorMessage: '请填写活动名称' };
+      const patched = patchActivityRow(item.id, { name });
+      return { success: true, data: patched };
+    },
+  },
+  {
     method: 'POST',
     path: '/api/crowd-marketing/activities/:id/submit-approve',
     handler: ({ pathParams }) => {

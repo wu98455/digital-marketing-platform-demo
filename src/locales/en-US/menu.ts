@@ -8,7 +8,6 @@ export default {
   'menu.tag-center.tag-center-product': 'Product Data',
   'menu.tag-center.tag-center-campaign': 'Campaigns',
   'menu.tag-center.tag-create': 'Create Tag',
-  'menu.tag-center.tag-data-create': 'Create Tag',
   'menu.tag-center.tag-edit': 'Edit Tag',
   'menu.tag-center.customer-view': 'Person Detail',
   'menu.crowd': 'Target Audience',
