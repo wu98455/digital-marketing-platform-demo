@@ -46,14 +46,32 @@ export default [
         component: './tag-center/store',
       },
       {
+        path: '/tag-center/store/view/:id',
+        name: 'tag-center-store-view',
+        component: './tag-center/store/view',
+        hideInMenu: true,
+      },
+      {
         path: '/tag-center/product',
         name: 'tag-center-product',
         component: './tag-center/product',
       },
       {
+        path: '/tag-center/product/view/:id',
+        name: 'tag-center-product-view',
+        component: './tag-center/product/view',
+        hideInMenu: true,
+      },
+      {
         path: '/tag-center/campaign',
         name: 'tag-center-campaign',
         component: './tag-center/campaign',
+      },
+      {
+        path: '/tag-center/campaign/view/:id',
+        name: 'tag-center-campaign-view',
+        component: './tag-center/campaign/view',
+        hideInMenu: true,
       },
       {
         path: '/tag-center/create',
@@ -71,6 +89,12 @@ export default [
         path: '/tag-center/edit/:group/:tag',
         name: 'tag-edit',
         component: './tag-center/create',
+        hideInMenu: true,
+      },
+      {
+        path: '/tag-center/detail/:group/:tag',
+        name: 'tag-detail',
+        component: './tag-center/detail',
         hideInMenu: true,
       },
       {
@@ -172,7 +196,19 @@ export default [
       {
         path: '/crowd-marketing/node-record',
         name: 'node-record',
-        component: './crowd-marketing/node-record',
+        hideChildrenInMenu: true,
+        routes: [
+          {
+            path: '/crowd-marketing/node-record',
+            component: './crowd-marketing/node-record',
+          },
+          {
+            path: '/crowd-marketing/node-record/result/:id',
+            name: 'node-record-result',
+            component: './crowd-marketing/activity/report',
+            hideInMenu: true,
+          },
+        ],
       },
     ],
   },
@@ -200,6 +236,12 @@ export default [
         access: 'canSystemRoles',
       },
       {
+        path: '/system/org',
+        name: 'org',
+        component: './system/org',
+        access: 'canSystemOrg',
+      },
+      {
         path: '/system/menus',
         name: 'menus',
         component: './system/menus',
@@ -210,12 +252,6 @@ export default [
         name: 'audit',
         component: './system/audit',
         access: 'canSystemAudit',
-      },
-      {
-        path: '/system/org',
-        name: 'org',
-        component: './system/org',
-        access: 'canSystemOrg',
       },
     ],
   },
@@ -320,7 +356,7 @@ export default [
   { path: '/customer-asset/crowd/custom', redirect: '/crowd' },
   {
     path: '/',
-    redirect: '/welcome',
+    redirect: '/tag-center/list',
   },
   {
     path: '*',

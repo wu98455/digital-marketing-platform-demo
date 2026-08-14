@@ -1,6 +1,9 @@
 export { default as TagChips } from './TagChips';
 export { default as TagPickerModal } from './TagPickerModal';
 export { default as TagLibraryDrawer } from './TagLibraryDrawer';
+export { default as MultiLibraryTagPicker } from './MultiLibraryTagPicker';
+export type { LibraryTagItem } from './MultiLibraryTagPicker';
+export { TAG_LIBRARY_TABS, libraryTagKey } from './MultiLibraryTagPicker';
 export {
   TagCatalogProvider,
   useTagCatalog,

@@ -7,10 +7,11 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { request, useModel } from '@umijs/max';
-import { Button, Form, Modal, Space, Tree, message } from 'antd';
+import { Button, Checkbox, Form, Modal, Space, Tree, message } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
+import { CENTER_OPTIONS, MARKETING_CENTERS } from '@/utils/centers';
 import type { MenuTreeNode, OpPermission, SystemRole } from '@/utils/systemAdminStore';
 
 const MENU_PREFIX = 'menu:';
@@ -87,6 +88,9 @@ const SystemRolesPage: React.FC = () => {
   const [editing, setEditing] = useState<SystemRole | null>(null);
   const [menuTree, setMenuTree] = useState<MenuTreeNode[]>([]);
   const [checkedKeys, setCheckedKeys] = useState<React.Key[]>([]);
+  const [centers, setCenters] = useState<string[]>([]);
+  const [treeExpanded, setTreeExpanded] = useState(false);
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
   const [form] = Form.useForm();
 
   const permissionTree = useMemo(() => buildPermissionTree(menuTree), [menuTree]);
@@ -104,6 +108,9 @@ const SystemRolesPage: React.FC = () => {
     await loadMenuTree();
     setEditing(role);
     setCheckedKeys(roleToCheckedKeys(role));
+    setCenters(role?.centers?.length ? [...role.centers] : [...MARKETING_CENTERS]);
+    setTreeExpanded(false);
+    setExpandedKeys([]);
     form.setFieldsValue({
       name: role?.name || '',
       description: role?.description || '',
@@ -112,41 +119,84 @@ const SystemRolesPage: React.FC = () => {
   };
 
   const columns: ProColumns<SystemRole>[] = [
-    { title: '角色名称', dataIndex: 'name', search: false },
     {
-      title: '关键词',
-      dataIndex: 'keyword',
+      title: '角色名称',
+      dataIndex: 'name',
       hideInTable: true,
+      fieldProps: { placeholder: '名称或说明' },
     },
+    {
+      title: '分中心',
+      dataIndex: 'center',
+      hideInTable: true,
+      valueType: 'select',
+      initialValue: '全部',
+      valueEnum: {
+        全部: { text: '全部' },
+        ...Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
+      },
+    },
+    { title: '角色名称', dataIndex: 'name', search: false, width: 160 },
     { title: '说明', dataIndex: 'description', search: false, ellipsis: true },
     {
       title: '菜单权限数',
       dataIndex: 'menus',
       search: false,
-      width: 120,
+      width: 110,
       render: (_, row) => row.menus?.length || 0,
+    },
+    {
+      title: '分中心',
+      dataIndex: 'centerNames',
+      search: false,
+      ellipsis: true,
+      render: (_, row) => (row.centers || []).join('、') || '--',
     },
     {
       title: '操作权限数',
       dataIndex: 'operations',
       search: false,
-      width: 120,
+      width: 110,
       render: (_, row) => row.operations?.length || 0,
     },
     {
       title: '操作',
       valueType: 'option',
-      width: 140,
+      width: 180,
       render: (_, row) => [
         <a key="edit" onClick={() => openModal(row)}>
           编辑
+        </a>,
+        <a
+          key="copy"
+          onClick={() => {
+            Modal.confirm({
+              title: `复制角色「${row.name}」？`,
+              content: '将生成同名权限的副本，可再编辑调整。',
+              onOk: async () => {
+                const res = await request<{ success: boolean; errorMessage?: string }>(
+                  `/api/system/roles/${row.id}/copy`,
+                  { method: 'POST', data: { actor } },
+                );
+                if (res?.success === false) {
+                  message.error(res.errorMessage || '复制失败');
+                  return;
+                }
+                message.success('已复制角色');
+                actionRef.current?.reload();
+              },
+            });
+          }}
+        >
+          复制
         </a>,
         <a
           key="del"
           onClick={() => {
             Modal.confirm({
               title: `删除角色「${row.name}」？`,
-              content: '若仍有用户绑定该角色将无法删除。',
+              content: '内置角色不可删；若仍有用户绑定将无法删除。',
+              okButtonProps: { danger: true },
               onOk: async () => {
                 const res = await request<{ success: boolean; errorMessage?: string }>(
                   `/api/system/roles/${row.id}`,
@@ -181,21 +231,16 @@ const SystemRolesPage: React.FC = () => {
             新建角色
           </Button>,
         ]}
-        request={async (params) => {
-          const res = await request<{ data: SystemRole[] }>('/api/system/roles');
-          let list = res.data || [];
-          const kw = String(params.keyword || '').trim();
-          if (kw) {
-            list = list.filter(
-              (r) => r.name.includes(kw) || (r.description || '').includes(kw),
-            );
-          }
-          return {
-            data: list,
-            total: list.length,
-            success: true,
-          };
-        }}
+        request={async (params) =>
+          request('/api/system/roles', {
+            params: {
+              name: params.name,
+              center: params.center,
+              current: params.current,
+              pageSize: params.pageSize,
+            },
+          })
+        }
       />
 
       <ModalForm
@@ -207,12 +252,24 @@ const SystemRolesPage: React.FC = () => {
           if (!v) {
             setEditing(null);
             setCheckedKeys([]);
+            setCenters([]);
           }
         }}
-        modalProps={{ destroyOnHidden: true, width: 640 }}
+        modalProps={{
+          destroyOnHidden: true,
+          width: 640,
+          /** 不用 centered，改用 top:48 + max-height，保证上下外边距各约 48px */
+          centered: false,
+          className: 'role-edit-modal',
+          style: { top: 48 },
+        }}
         onFinish={async (values) => {
           const { menus, operations } = checkedKeysToRole(checkedKeys);
-          const payload = { ...values, menus, operations, actor };
+          if (!centers.length) {
+            message.error('请至少选择一个分中心（数据权限）');
+            return false;
+          }
+          const payload = { ...values, menus, operations, centers, actor };
           if (editing) {
             const res = await request<{ success: boolean; errorMessage?: string }>(
               `/api/system/roles/${editing.id}`,
@@ -241,10 +298,31 @@ const SystemRolesPage: React.FC = () => {
         <ProFormText name="name" label="角色名称" rules={[{ required: true }]} />
         <ProFormTextArea name="description" label="说明" fieldProps={{ rows: 2 }} />
         <Form.Item
+          label="数据权限 · 分中心"
+          required
+          extra="控制可查看/选用的源数据范围；业务单据上的分中心选项也来自此处。"
+        >
+          <Checkbox.Group
+            options={CENTER_OPTIONS}
+            value={centers}
+            onChange={(v) => setCenters(v as string[])}
+          />
+        </Form.Item>
+        <Form.Item
           label="菜单与操作权限"
           extra="按侧栏菜单顺序展示；勾选父级可联动子级。叶子节点中带「写/审批/执行」的为操作权限。"
         >
-          <Space style={{ marginBottom: 8 }}>
+          <Space style={{ marginBottom: 8 }} wrap>
+            <Checkbox
+              checked={treeExpanded}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setTreeExpanded(checked);
+                setExpandedKeys(checked ? collectTreeKeys(permissionTree) : []);
+              }}
+            >
+              展开全部菜单树
+            </Checkbox>
             <Button
               size="small"
               onClick={() => setCheckedKeys(collectTreeKeys(permissionTree))}
@@ -265,20 +343,16 @@ const SystemRolesPage: React.FC = () => {
               清空
             </Button>
           </Space>
-          <div
-            style={{
-              maxHeight: 360,
-              overflow: 'auto',
-              border: '1px solid #f0f0f0',
-              borderRadius: 8,
-              padding: '8px 12px',
-            }}
-          >
+          <div className="role-perm-tree-scroll">
             <Tree
               checkable
-              defaultExpandAll
               treeData={permissionTree}
               checkedKeys={checkedKeys}
+              expandedKeys={expandedKeys}
+              onExpand={(keys) => {
+                setExpandedKeys(keys);
+                setTreeExpanded(keys.length > 0);
+              }}
               onCheck={(keys) => {
                 const next = Array.isArray(keys) ? keys : keys.checked;
                 setCheckedKeys(next);

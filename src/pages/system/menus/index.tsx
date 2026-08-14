@@ -11,6 +11,7 @@ import {
 import { request, useModel } from '@umijs/max';
 import { Button, Modal, Space, Switch, Tag, message } from 'antd';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { listSearchProps } from '@/utils/listSearch';
 import type { MenuTreeNode } from '@/utils/systemAdminStore';
 import styles from './index.less';
 
@@ -40,6 +41,40 @@ const flattenOptions = (
   });
   return out;
 };
+
+function filterMenuTree(
+  nodes: MenuRow[],
+  filters: { name?: string; path?: string; visible?: string; kind?: string },
+): MenuRow[] {
+  const name = String(filters.name || '').trim();
+  const path = String(filters.path || '').trim();
+  const visible = filters.visible;
+  const kind = filters.kind;
+
+  const walk = (list: MenuRow[]): MenuRow[] =>
+    list
+      .map((n) => {
+        const children = n.children?.length ? walk(n.children) : undefined;
+        const nameOk = !name || n.name.includes(name);
+        const pathOk = !path || (n.path || '').includes(path);
+        const visibleOk =
+          !visible ||
+          visible === '全部' ||
+          (visible === '显示' ? !n.hideInMenu : !!n.hideInMenu);
+        const kindOk =
+          !kind ||
+          kind === '全部' ||
+          (kind === '内置' ? !!n.builtin : !n.builtin);
+        const selfHit = nameOk && pathOk && visibleOk && kindOk;
+        if (selfHit || children?.length) {
+          return { ...n, children };
+        }
+        return null;
+      })
+      .filter(Boolean) as MenuRow[];
+
+  return walk(nodes);
+}
 
 const SystemMenusPage: React.FC = () => {
   const { initialState } = useModel('@@initialState');
@@ -122,6 +157,7 @@ const SystemMenusPage: React.FC = () => {
     {
       title: '菜单名称',
       dataIndex: 'name',
+      fieldProps: { placeholder: '菜单名称' },
       render: (_, row) => (
         <span className={styles.menuName}>
           {row.name}
@@ -140,23 +176,51 @@ const SystemMenusPage: React.FC = () => {
       dataIndex: 'path',
       width: 220,
       ellipsis: true,
+      fieldProps: { placeholder: '路径关键词' },
       render: (_, row) => row.path || <span className={styles.muted}>（目录）</span>,
+    },
+    {
+      title: '显示',
+      dataIndex: 'visible',
+      hideInTable: true,
+      valueType: 'select',
+      initialValue: '全部',
+      valueEnum: {
+        全部: { text: '全部' },
+        显示: { text: '显示' },
+        隐藏: { text: '隐藏' },
+      },
+    },
+    {
+      title: '类型',
+      dataIndex: 'kind',
+      hideInTable: true,
+      valueType: 'select',
+      initialValue: '全部',
+      valueEnum: {
+        全部: { text: '全部' },
+        内置: { text: '内置' },
+        自定义: { text: '自定义' },
+      },
     },
     {
       title: '图标',
       dataIndex: 'icon',
       width: 160,
+      search: false,
       render: (_, row) => row.icon || '-',
     },
     {
       title: '排序',
       dataIndex: 'order',
       width: 80,
+      search: false,
     },
     {
       title: '显示',
       dataIndex: 'hideInMenu',
       width: 90,
+      search: false,
       render: (_, row) => (
         <Switch
           checked={!row.hideInMenu}
@@ -189,6 +253,7 @@ const SystemMenusPage: React.FC = () => {
       title: '操作',
       valueType: 'option',
       width: 220,
+      search: false,
       render: (_, row) => (
         <Space>
           <a onClick={() => openEdit(row)}>编辑</a>
@@ -204,13 +269,13 @@ const SystemMenusPage: React.FC = () => {
       <div className={styles.menuTreeTable}>
         <ProTable<MenuRow>
           rowKey="key"
-          search={false}
+          search={listSearchProps}
           pagination={false}
           loading={loading}
-          dataSource={tree}
           columns={columns}
           expandable={{ defaultExpandAllRows: true }}
           indentSize={24}
+          params={{ treeLen: tree.length }}
           toolBarRender={() => [
             <Button key="reset" onClick={reset}>
               重置默认
@@ -219,6 +284,15 @@ const SystemMenusPage: React.FC = () => {
               新建菜单
             </Button>,
           ]}
+          request={async (params) => {
+            const data = filterMenuTree(tree, {
+              name: params.name,
+              path: params.path,
+              visible: params.visible,
+              kind: params.kind,
+            });
+            return { data, success: true, total: data.length };
+          }}
         />
       </div>
 

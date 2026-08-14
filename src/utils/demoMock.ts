@@ -102,21 +102,26 @@ export async function demoLogin(body: API.LoginParams): Promise<API.LoginResult>
       allowSelfApprove: true,
     };
   }
-  if (!user && username === 'admin' && password === 'ant.design') {
+  if (!user && username === 'admin' && (password === '123456' || password === 'ant.design')) {
     user = findUserByUsername('admin') || {
       id: 'u-admin',
       username: 'admin',
       name: '系统管理员',
-      password: 'ant.design',
+      password: '123456',
       status: '启用',
       roleId: 'admin',
-      approverIds: ['demo'],
+      approverIds: ['demo', 'WangSiyi'],
       allowSelfApprove: true,
     };
   }
 
   const validMobile = body.type === 'mobile';
-  const passwordOk = user && user.password === password && user.status === '启用';
+  const passwordOk =
+    user &&
+    (user.password === password ||
+      (user.username === 'admin' &&
+        (password === '123456' || password === 'ant.design'))) &&
+    user.status === '启用';
 
   if ((user && passwordOk) || validMobile) {
     const loginName = user?.username || 'demo';

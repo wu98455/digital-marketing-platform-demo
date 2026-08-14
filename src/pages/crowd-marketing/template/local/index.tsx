@@ -11,6 +11,8 @@ import {
 import { history, request } from '@umijs/max';
 import { Button, Checkbox, Dropdown, Modal, message } from 'antd';
 import React, { useRef, useState } from 'react';
+import CenterTags from '@/components/CenterTags';
+import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
 
 type TemplateItem = {
@@ -22,6 +24,7 @@ type TemplateItem = {
   creator: string;
   createdAt: string;
   periodic?: boolean;
+  centers?: string[];
 };
 
 const CATALOGS = ['文旅营销', '业务目录', '未分类'];
@@ -67,6 +70,13 @@ const LocalTemplatePage: React.FC = () => {
       initialValue: '全部',
       valueEnum: { 全部: { text: '全部' }, 是: { text: '是' }, 否: { text: '否' } },
     },
+    {
+      title: '分中心',
+      dataIndex: 'centerSearch',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
+    },
     { title: '模板ID', dataIndex: 'id', search: false, width: 100 },
     {
       title: '模板名称',
@@ -82,6 +92,17 @@ const LocalTemplatePage: React.FC = () => {
     },
     { title: '营销对象', dataIndex: 'target', search: false, width: 120 },
     { title: '分类', dataIndex: 'catalog', search: false, width: 100 },
+    {
+      title: '分中心',
+      dataIndex: 'centers',
+      search: false,
+      width: 180,
+      render: (_, row) => {
+        const n = Number(String(row.id).replace(/\D/g, '') || 0);
+        const fallback = [MARKETING_CENTERS[n % MARKETING_CENTERS.length]];
+        return <CenterTags centers={row.centers?.length ? row.centers : fallback} />;
+      },
+    },
     {
       title: '周期活动',
       dataIndex: 'periodic',
@@ -207,6 +228,7 @@ const LocalTemplatePage: React.FC = () => {
                 params.periodicSearch && params.periodicSearch !== '全部'
                   ? params.periodicSearch
                   : undefined,
+              center: params.centerSearch,
               onlyMine: onlyMine ? 'true' : undefined,
             },
           })

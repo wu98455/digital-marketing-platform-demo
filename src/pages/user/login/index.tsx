@@ -23,24 +23,26 @@ import { getFakeCaptcha } from '@/services/ant-design-pro/login';
 import { stripPublicPath, withPublicPath } from '@/utils/publicPath';
 import Settings from '../../../../config/defaultSettings';
 
+const DEFAULT_HOME = '/welcome';
+
 /**
  * Validate redirect URL to prevent open redirect attacks.
  * Only allow same-origin relative paths starting with '/'.
  * GitHub Pages 子路径下会去掉 PUBLIC_PATH 前缀，避免 history.push 重复 base 导致 404。
  */
 const getSafeRedirectUrl = (redirect: string | null): string => {
-  if (!redirect?.startsWith('/')) return '/welcome';
+  if (!redirect?.startsWith('/')) return DEFAULT_HOME;
 
-  if (redirect.startsWith('//')) return '/welcome';
+  if (redirect.startsWith('//')) return DEFAULT_HOME;
 
   try {
     const parsed = new URL(redirect, window.location.origin);
-    if (parsed.origin !== window.location.origin) return '/welcome';
+    if (parsed.origin !== window.location.origin) return DEFAULT_HOME;
     let path = stripPublicPath(parsed.pathname).replace(/\/+$/, '') || '/';
-    if (path === '/' || path === '/user/login') return '/welcome';
+    if (path === '/' || path === '/user/login') return DEFAULT_HOME;
     return `${path}${parsed.search}${parsed.hash}`;
   } catch {
-    return '/welcome';
+    return DEFAULT_HOME;
   }
 };
 
@@ -210,7 +212,7 @@ const Login: React.FC = () => {
             <LoginMessage
               content={intl.formatMessage({
                 id: 'pages.login.accountLogin.errorMessage',
-                defaultMessage: '账户或密码错误（demo/123456）',
+                defaultMessage: '账户或密码错误（admin/123456）',
               })}
             />
           )}
@@ -224,7 +226,7 @@ const Login: React.FC = () => {
                 }}
                 placeholder={intl.formatMessage({
                   id: 'pages.login.username.placeholder',
-                  defaultMessage: '用户名: demo',
+                  defaultMessage: '用户名: admin',
                 })}
                 rules={[
                   {

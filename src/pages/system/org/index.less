@@ -1,45 +1,179 @@
-.orgLayout {
+.orgPage {
   display: flex;
   gap: 16px;
-  min-height: 560px;
+  align-items: stretch;
+  min-height: calc(100vh - 180px);
 }
 
-.orgLeft {
-  flex: 0 0 320px;
-  max-width: 360px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 8px;
-  padding: 16px;
-  background: #fff;
+.orgSider {
+  flex: 0 0 300px;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  min-height: 480px;
 }
 
-.orgRight {
+.orgSiderTools {
+  margin-bottom: 12px;
+}
+
+/* 与 Input.Search 默认高度（32px）对齐 */
+.addOrgBtn {
+  height: 32px !important;
+  padding: 0 15px !important;
+  line-height: 30px;
+}
+
+.orgTreeScroll {
+  flex: 1;
+  min-height: 200px;
+  overflow: auto;
+  margin-top: 8px;
+
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+
+  &:hover {
+    scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+  }
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 6px;
+  }
+
+  &:hover::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.12);
+  }
+
+  :global {
+    /* 覆盖 panel-surface 树样式，保证图标与名称同一行 */
+    .ant-tree .ant-tree-treenode {
+      display: flex;
+      align-items: center;
+      padding: 2px 0;
+      width: 100%;
+    }
+
+    .ant-tree .ant-tree-node-content-wrapper {
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      flex: 1;
+      min-width: 0;
+      min-height: 32px;
+      line-height: 32px;
+      padding-inline: 4px 4px;
+    }
+
+    .ant-tree .ant-tree-title {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      line-height: 32px;
+    }
+
+    .ant-tree .ant-tree-switcher {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 32px;
+      align-self: center;
+    }
+  }
+}
+
+.orgIcon,
+.deptIcon {
+  flex-shrink: 0;
+  font-size: 14px;
+  margin-inline-end: 6px;
+  /* 未选中：Ant Design 默认图标色 */
+  color: rgba(0, 0, 0, 0.45);
+  transition: color 180ms ease;
+}
+
+/* 选中：主题蓝 */
+:global(.ant-tree-node-selected) {
+  .orgIcon,
+  .deptIcon {
+    color: var(--ant-color-primary, #1677ff);
+  }
+}
+
+.orgTreeRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+}
+
+.orgTreeName {
   flex: 1;
   min-width: 0;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 8px;
-  padding: 16px;
-  background: #fff;
-}
-
-.orgTreeNode {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.orgTreeTitle {
-  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 32px;
+}
+
+.orgTreeActions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: 4px;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.orgTreeRow:hover .orgTreeActions,
+.orgTreeRowActive .orgTreeActions,
+.orgTreeRowMoreOpen .orgTreeActions {
+  opacity: 1;
+}
+
+.moreBtn {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  padding: 0 !important;
+}
+
+:global(.ant-tree-node-selected) .moreBtn {
+  color: inherit !important;
+}
+
+.orgMain {
+  flex: 1;
+  min-width: 0;
 }
 
 .orgEmpty {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 420px;
-  color: rgba(0, 0, 0, 0.45);
+  min-height: 480px;
+  background: #fff;
+}
+
+@media (max-width: 768px) {
+  .orgPage {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .orgSider {
+    flex: none;
+    width: 100%;
+    max-height: 360px;
+  }
 }

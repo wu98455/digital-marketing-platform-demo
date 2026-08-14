@@ -9,7 +9,7 @@
 | 本地路径 | `D:\dev\projects\数字营销平台` |
 | GitHub 仓库名 | `digital-marketing-platform-demo` |
 | Demo（部署后） | https://wu98455.github.io/digital-marketing-platform-demo/ |
-| 演示账号 | `demo / 123456` 或 `admin / ant.design` |
+| 演示账号 | `admin / 123456`（超管）或 `demo / 123456`、`tagger / 123456`、`marketer / 123456` |
 
 详细对照见 `项目对照表.md`。
 

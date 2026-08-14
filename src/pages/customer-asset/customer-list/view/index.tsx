@@ -19,6 +19,7 @@ import {
 import React, { useEffect, useState } from 'react';
 import { TagChips, flattenGroups, useTagCatalog } from '@/components/Tagging';
 import { listSearchProps } from '@/utils/listSearch';
+import { pageHeader } from '@/utils/pageHeader';
 import EditCustomerTagsModal, {
   type TagGroup,
 } from '../components/EditCustomerTagsModal';
@@ -36,9 +37,18 @@ const CustomerViewPage: React.FC = () => {
   const [rfmMode, setRfmMode] = useState('all');
   const [tagEditOpen, setTagEditOpen] = useState(false);
 
-  const backPath = location.pathname.startsWith('/tag-center')
-    ? '/tag-center/customer'
-    : '/customer-asset/customer-list';
+  const fromTagCenter = location.pathname.startsWith('/tag-center');
+  const backPath = fromTagCenter ? '/tag-center/customer' : '/customer-asset/customer-list';
+  const crumbs = fromTagCenter
+    ? [
+        { title: '数据打标', path: '/tag-center/list' },
+        { title: '人员数据', path: '/tag-center/customer' },
+        { title: '人员详情' },
+      ]
+    : [
+        { title: '客户列表', path: '/customer-asset/customer-list' },
+        { title: '客户详情' },
+      ];
 
   useEffect(() => {
     if (!id) return;
@@ -52,18 +62,42 @@ const CustomerViewPage: React.FC = () => {
   const headerChips = flattenGroups(customTags);
 
   return (
-    <PageContainer title={false} onBack={() => history.push(backPath)}>
+    <PageContainer
+      {...pageHeader({
+        title: fromTagCenter ? '人员详情' : '客户详情',
+        backTo: backPath,
+        crumbs,
+      })}
+    >
       <div className="panel-surface" style={{ padding: 24 }}>
         <Spin spinning={loading}>
           <Space style={{ marginBottom: 12 }} wrap align="start">
             <Typography.Title level={5} style={{ margin: 0 }}>
-              客户视图
+              {fromTagCenter ? '人员视图' : '客户视图'}
             </Typography.Title>
             {data?.status && <Tag color="success">{data.status}</Tag>}
-            <Typography.Text type="secondary">全渠道客户ID</Typography.Text>
-            <Typography.Text copyable={{ text: data?.customerIdFull }}>
-              {data?.customerIdFull || '--'}
-            </Typography.Text>
+            {fromTagCenter ? (
+              <>
+                <Typography.Text type="secondary">人员 OneID</Typography.Text>
+                <Typography.Text
+                  copyable={{
+                    text:
+                      data?.oneId ||
+                      `OID20260812${String(id || '').replace(/\D/g, '').padStart(4, '0')}`,
+                  }}
+                >
+                  {data?.oneId ||
+                    `OID20260812${String(id || '').replace(/\D/g, '').padStart(4, '0')}`}
+                </Typography.Text>
+              </>
+            ) : (
+              <>
+                <Typography.Text type="secondary">全渠道客户ID</Typography.Text>
+                <Typography.Text copyable={{ text: data?.customerIdFull }}>
+                  {data?.customerIdFull || '--'}
+                </Typography.Text>
+              </>
+            )}
           </Space>
           <div style={{ marginBottom: 16 }}>
             <Space align="center" wrap>

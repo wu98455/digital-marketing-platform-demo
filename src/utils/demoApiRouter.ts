@@ -4,7 +4,10 @@ import {
   emptyTagRuleConditions,
   estimateCount as estimateTagCount,
   samplesFromConditions,
+  summarizeDimFilters,
 } from './tagRuleTypes';
+import { mockOneId } from './centers';
+import { buildAnalyticsOverview } from './analyticsOverview';
 
 function pageSlice<T>(list: T[], current: string | number = 1, pageSize: string | number = 20) {
   const c = Number(current) || 1;
@@ -35,6 +38,17 @@ function pageSliceMarketing<T>(list: T[], current: string | number = 1, pageSize
 const maskPhone = (p: string) => `${p.slice(0, 3)}****${p.slice(-4)}`;
 const maskId = (id: string) => `${id.slice(0, 1)}*****${id.slice(-1)}`;
 
+const CENTER_SEED = ['长寿工惠', '山城工惠', '国企优品', '文旅惠'] as const;
+/** 按行循环分配分中心；偶发两值便于列表展示 */
+const seedCenters = (i: number): string[] => {
+  const a = CENTER_SEED[i % CENTER_SEED.length];
+  if (i % 7 === 0) {
+    const b = CENTER_SEED[(i + 1) % CENTER_SEED.length];
+    return a === b ? [a] : [a, b];
+  }
+  return [a];
+};
+
 const stores = [
   {
     id: 's1',
@@ -45,6 +59,7 @@ const stores = [
     area: '重庆市渝中区',
     attr: '线上',
     operateType: '自营',
+    centers: seedCenters(0),
   },
   {
     id: 's2',
@@ -55,6 +70,7 @@ const stores = [
     operateType: '自营',
     area: '重庆市江北区',
     attr: '线上',
+    centers: seedCenters(1),
   },
   {
     id: 's3',
@@ -65,6 +81,7 @@ const stores = [
     area: '重庆市渝北区',
     attr: '线上',
     operateType: '自营',
+    centers: seedCenters(2),
   },
   {
     id: 's4',
@@ -75,6 +92,7 @@ const stores = [
     area: '重庆市南岸区',
     attr: '线上',
     operateType: '自营',
+    centers: seedCenters(3),
   },
   {
     id: 's5',
@@ -85,6 +103,7 @@ const stores = [
     area: '--',
     attr: '线下',
     operateType: '三方',
+    centers: seedCenters(4),
   },
 ];
 
@@ -97,6 +116,7 @@ const topicCampaigns = [
     startAt: '2026-07-01',
     endAt: '2026-08-31',
     status: '进行中',
+    centers: seedCenters(0),
   },
   {
     id: 'A1002',
@@ -106,6 +126,7 @@ const topicCampaigns = [
     startAt: '2026-06-01',
     endAt: '2026-06-30',
     status: '已结束',
+    centers: seedCenters(1),
   },
   {
     id: 'A1003',
@@ -115,6 +136,7 @@ const topicCampaigns = [
     startAt: '2026-09-10',
     endAt: '2026-09-18',
     status: '未开始',
+    centers: seedCenters(2),
   },
   {
     id: 'A1004',
@@ -124,6 +146,7 @@ const topicCampaigns = [
     startAt: '2026-05-01',
     endAt: '2026-05-07',
     status: '已结束',
+    centers: seedCenters(3),
   },
   {
     id: 'A1005',
@@ -133,6 +156,7 @@ const topicCampaigns = [
     startAt: '2026-07-15',
     endAt: '2026-08-15',
     status: '进行中',
+    centers: seedCenters(4),
   },
 ];
 
@@ -158,6 +182,7 @@ const customers = Array.from({ length: 48 }).map((_, i) => {
     status: i % 8 === 0 ? '潜在客户' : '正式客户',
     memberId: `M${10000 + i}`,
     memberLevel: ['普通', '银卡', '金卡', '黑金'][i % 4],
+    centers: seedCenters(i),
   };
 });
 
@@ -168,6 +193,7 @@ let tagRules: {
   name: string;
   targetTag: { group: string; tag: string };
   conditions: Record<string, any>;
+  centers?: string[];
   enabled: boolean;
   lastRunAt?: string;
   lastRunCount?: number;
@@ -186,6 +212,7 @@ let tagRules: {
         groups: [{ amount: { op: 'GREATER_THAN_OR_EQUAL', value: 500 }, salesMethod: '正常售卖' }],
       },
     },
+    centers: seedCenters(0),
     enabled: true,
     creator: 'demo',
     lastRunAt: '2026-08-01 10:00:00',
@@ -204,6 +231,7 @@ let tagRules: {
         groups: [{ createOrderNoType: '1次' }, { createOrderNoType: '0次' }],
       },
     },
+    centers: seedCenters(1),
     enabled: true,
     creator: 'WangSiyi',
     createdAt: '2026-07-28 15:00:00',
@@ -244,6 +272,7 @@ let crowds = [
     catalog: '文旅人群',
     canDelete: false,
     canCopy: false,
+    centers: seedCenters(0),
   },
   {
     id: '241076',
@@ -258,6 +287,7 @@ let crowds = [
     catalog: '文旅人群',
     canDelete: true,
     canCopy: true,
+    centers: seedCenters(1),
   },
   {
     id: '241077',
@@ -272,6 +302,7 @@ let crowds = [
     catalog: '业务目录',
     canDelete: true,
     canCopy: true,
+    centers: seedCenters(2),
   },
   {
     id: '237295',
@@ -286,6 +317,7 @@ let crowds = [
     catalog: '文旅人群',
     canDelete: false,
     canCopy: true,
+    centers: seedCenters(3),
   },
   {
     id: '230001',
@@ -300,6 +332,7 @@ let crowds = [
     catalog: '未分类',
     canDelete: true,
     canCopy: true,
+    centers: seedCenters(4),
   },
   {
     id: '229880',
@@ -314,6 +347,7 @@ let crowds = [
     catalog: '文旅人群',
     canDelete: false,
     canCopy: true,
+    centers: seedCenters(5),
   },
   {
     id: '228100',
@@ -328,6 +362,7 @@ let crowds = [
     catalog: '未分类',
     canDelete: true,
     canCopy: true,
+    centers: seedCenters(6),
   },
 ];
 
@@ -415,6 +450,7 @@ const products = Array.from({ length: 20 }).map((_, i) => ({
   price: (99 + i * 13).toFixed(2),
   syncedAt: `2026-07-${String((i % 15) + 1).padStart(2, '0')} 09:00:00`,
   tagValues: i % 3 === 0 ? '热销,推荐' : '--',
+  centers: seedCenters(i),
 }));
 
 const productTags = Array.from({ length: 10 }).map((_, i) => ({
@@ -451,6 +487,7 @@ type ActivityRow = {
   canEdit: boolean;
   canDelete: boolean;
   pinned: boolean;
+  centers: string[];
 };
 
 let activities: ActivityRow[] = Array.from({ length: 16 }).map((_, i) => {
@@ -470,12 +507,15 @@ let activities: ActivityRow[] = Array.from({ length: 16 }).map((_, i) => {
     canEdit: status !== '已结束',
     canDelete: status !== '进行中',
     pinned: i === 0,
+    centers: seedCenters(i),
   };
 });
 
 (() => {
-  const pending = activities.find((a) => a.status === '待审批');
-  if (pending) pending.approver = 'demo';
+  /** 演示：至少一条待我（demo）审批；另保留一条非 demo 审批人，便于对比可见性 */
+  const pendings = activities.filter((a) => a.status === '待审批');
+  if (pendings[0]) pendings[0].approver = 'demo';
+  if (pendings[1]) pendings[1].approver = 'WangSiyi';
   const draft = activities.find((a) => a.status === '草稿');
   if (draft) {
     draft.approver = 'WangSiyi';
@@ -487,6 +527,11 @@ let activities: ActivityRow[] = Array.from({ length: 16 }).map((_, i) => {
     approved.approver = 'WangSiyi';
     approved.creator = 'demo';
     approved.mine = true;
+  }
+  const paused = activities.find((a) => a.status === '已暂停');
+  if (paused) {
+    paused.creator = 'demo';
+    paused.mine = true;
   }
 })();
 
@@ -515,6 +560,7 @@ let localTemplates = Array.from({ length: 10 }).map((_, i) => ({
   createdAt: `2026-0${(i % 5) + 1}-15 14:00:00`,
   mine: i % 2 === 0,
   periodic: i % 3 === 0,
+  centers: seedCenters(i),
 }));
 
 const activityExecRecords = Array.from({ length: 20 }).map((_, i) => {
@@ -535,6 +581,7 @@ const activityExecRecords = Array.from({ length: 20 }).map((_, i) => {
     targetCount,
     reachSuccess,
     reachFail,
+    centers: seedCenters(i),
   };
 });
 
@@ -608,6 +655,14 @@ function matchPath(pathname: string, template: string): Record<string, string> |
 const routes: RouteDef[] = [
   {
     method: 'GET',
+    path: '/api/analytics/overview',
+    handler: ({ params }) => ({
+      success: true,
+      data: buildAnalyticsOverview(String(params.centers || ''), String(params.range || '30d')),
+    }),
+  },
+  {
+    method: 'GET',
     path: '/api/customer-asset/stores',
     handler: () => ({ data: stores, total: stores.length, success: true }),
   },
@@ -620,8 +675,8 @@ const routes: RouteDef[] = [
     method: 'GET',
     path: '/api/customer-asset/customers',
     handler: ({ params }) => {
-      const { current = 1, pageSize = 20, customerId, phone, name, tagKey } = params;
-      let list = customers.map((c) => {
+      const { current = 1, pageSize = 20, customerId, phone, name, tagKey, oneId, center } = params;
+      let list = customers.map((c, idx) => {
         const storeTags = memberTagStore[c.id] || [];
         const tagGroups: Record<string, string[]> = {};
         storeTags.forEach((t) => {
@@ -630,6 +685,8 @@ const routes: RouteDef[] = [
         });
         return {
           ...c,
+          oneId: (c as any).oneId || mockOneId(idx + 1),
+          centers: (c as any).centers?.length ? (c as any).centers : seedCenters(idx),
           tagInstances: storeTags,
           tags: Object.keys(tagGroups).map((group) => ({ group, tags: tagGroups[group] })),
         };
@@ -648,6 +705,12 @@ const routes: RouteDef[] = [
       }
       if (name) {
         list = list.filter((x) => (x.name || '').includes(String(name)));
+      }
+      if (oneId) {
+        list = list.filter((x) => String((x as any).oneId || '').includes(String(oneId)));
+      }
+      if (center) {
+        list = list.filter((x) => ((x as any).centers || []).includes(String(center)));
       }
       if (tagKey) {
         const [g, t] = String(tagKey).split('::');
@@ -745,7 +808,8 @@ const routes: RouteDef[] = [
     method: 'GET',
     path: '/api/customer-asset/crowds',
     handler: ({ params }) => {
-      const { current = 1, pageSize = 20, keyword, type, catalog, onlyMine, creator } = params;
+      const { current = 1, pageSize = 20, keyword, type, catalog, onlyMine, creator, center, createdAtRange } =
+        params;
       let list = [...crowds];
       if (keyword) {
         list = list.filter((x) => x.name.includes(String(keyword)) || x.id.includes(String(keyword)));
@@ -759,10 +823,59 @@ const routes: RouteDef[] = [
       if (catalog && catalog !== '所有') {
         list = list.filter((x) => x.catalog === catalog);
       }
+      if (center) {
+        list = list.filter((x) => (x.centers || []).includes(String(center)));
+      }
+      if (createdAtRange) {
+        const range = String(createdAtRange).split(',');
+        if (range.length === 2) {
+          const [from, to] = range;
+          list = list.filter((x) => {
+            const d = (x.createdAt || '').slice(0, 10);
+            return d >= from && d <= to;
+          });
+        }
+      }
       if (onlyMine === 'true' || onlyMine === '1') {
         list = list.filter((x) => x.creator === 'demo');
       }
       return pageSlice(list, current, pageSize);
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/customer-asset/crowds',
+    handler: ({ data }) => {
+      const body = (data || {}) as Record<string, any>;
+      const name = String(body.name || '').trim();
+      if (!name) return { success: false, errorMessage: '请填写人群名称' };
+      if (crowds.some((c) => c.name === name)) {
+        return { success: false, errorMessage: '人群名称已存在，请换一个名称' };
+      }
+      const tags = Array.isArray(body.tags) ? body.tags : [];
+      const hasDim = summarizeDimFilters(body.conditions || {}).length > 0;
+      if (!tags.length && !hasDim) {
+        return { success: false, errorMessage: '请选择标签或填写维度筛选' };
+      }
+      const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const crowd = {
+        id: String(240000 + (Date.now() % 10000)),
+        name,
+        count: Number(body.count) || estimateTagCount(body.conditions || {}) || 200,
+        type: body.type || '条件人群',
+        creator: 'demo',
+        source: '标签圈选',
+        createdAt: ts,
+        updatedAt: ts,
+        syncStatus: '未同步',
+        catalog: '文旅人群',
+        canDelete: true,
+        canCopy: true,
+        centers: Array.isArray(body.centers) ? body.centers.map(String) : seedCenters(crowds.length),
+      };
+      crowds = [crowd, ...crowds];
+      appendAudit('demo', '创建', `创建目标人群「${name}」`);
+      return { success: true, data: crowd };
     },
   },
   {
@@ -775,10 +888,15 @@ const routes: RouteDef[] = [
         data: {
           ...item,
           conditions: '标签「高价值」 且 行为「近90天有互动」',
-          members: customers.slice(0, 5).map((c) => ({
-            customerId: c.customerIdMasked,
-            name: c.name || '--',
-            phone: c.phoneMasked,
+          members: customers.slice(0, 12).map((c, i) => ({
+            id: c.id,
+            oneId: mockOneId(i + 1),
+            memberId: c.memberId,
+            name: c.name || ['张三', '李四', '王五', '赵六', '钱七'][i % 5],
+            phoneMasked: c.phoneMasked,
+            centers: c.centers,
+            source:
+              i % 3 === 0 ? '标签圈选' : i % 3 === 1 ? '维度筛选' : '标签+维度',
           })),
           portrait: {
             gender: [
@@ -818,9 +936,10 @@ const routes: RouteDef[] = [
           createdAt?: string;
           updatedAt?: string;
           lastRunAt?: string;
+          centers?: string[];
         }
       >();
-      tagRules.forEach((r) => {
+      tagRules.forEach((r, idx) => {
         const key = `${r.targetTag.group}::${r.targetTag.tag}`;
         map.set(key, {
           group: r.targetTag.group,
@@ -832,6 +951,7 @@ const routes: RouteDef[] = [
           createdAt: r.createdAt,
           updatedAt: r.updatedAt,
           lastRunAt: r.lastRunAt,
+          centers: r.centers?.length ? r.centers : seedCenters(idx),
         });
       });
       const counts: Record<string, number> = {};
@@ -841,14 +961,15 @@ const routes: RouteDef[] = [
           counts[key] = (counts[key] || 0) + 1;
         });
       });
-      const data = Array.from(map.values()).map((row) => ({
+          const data = Array.from(map.values()).map((row) => ({
         ...row,
         count: counts[`${row.group}::${row.tag}`] || row.count || 0,
+        centers: (row as any).centers || ['山城工惠'],
       }));
-      Object.keys(counts).forEach((key) => {
+      Object.keys(counts).forEach((key, idx) => {
         if (!map.has(key)) {
           const [group, tag] = key.split('::');
-          data.push({ group, tag, count: counts[key] });
+          data.push({ group, tag, count: counts[key], centers: seedCenters(idx) });
         }
       });
       return { success: true, data };
@@ -897,6 +1018,7 @@ const routes: RouteDef[] = [
         name: String(body.name).trim(),
         targetTag: body.targetTag,
         conditions: body.conditions || {},
+        centers: Array.isArray(body.centers) ? body.centers.map(String) : seedCenters(0),
         enabled: body.enabled !== false,
         creator: body.creator || 'demo',
         createdAt: ts,
@@ -920,6 +1042,9 @@ const routes: RouteDef[] = [
         id: tagRules[idx].id,
         targetTag: body.targetTag || tagRules[idx].targetTag,
         conditions: body.conditions ?? tagRules[idx].conditions,
+        centers: Array.isArray(body.centers)
+          ? body.centers.map(String)
+          : tagRules[idx].centers || seedCenters(idx),
         updatedAt: ts,
       };
       return { success: true, data: tagRules[idx] };
@@ -937,9 +1062,14 @@ const routes: RouteDef[] = [
     method: 'POST',
     path: '/api/tag-center/rules/preview',
     handler: ({ data }) => {
-      const conditions = (data || {}).conditions || {};
+      const body = data || {};
+      const conditions = body.conditions || {};
+      const centers = Array.isArray(body.centers) ? body.centers.map(String) : undefined;
       const count = estimateTagCount(conditions);
-      return { success: true, data: { count, samples: samplesFromConditions(conditions) } };
+      return {
+        success: true,
+        data: { count, samples: samplesFromConditions(conditions, centers) },
+      };
     },
   },
   {
@@ -1003,6 +1133,7 @@ const routes: RouteDef[] = [
         catalog: '文旅人群',
         canDelete: true,
         canCopy: true,
+        centers: Array.isArray(body.centers) ? body.centers.map(String) : seedCenters(crowds.length),
       };
       crowds = [crowd, ...crowds];
       return { success: true, data: crowd };
@@ -1125,6 +1256,11 @@ const routes: RouteDef[] = [
     handler: (ctx) => systemAdminHandlers.resetPassword(ctx),
   },
   {
+    method: 'DELETE',
+    path: '/api/system/users/:id',
+    handler: (ctx) => systemAdminHandlers.deleteUser(ctx),
+  },
+  {
     method: 'GET',
     path: '/api/system/users/:username/approver-options',
     handler: (ctx) => systemAdminHandlers.approverOptions(ctx),
@@ -1132,7 +1268,7 @@ const routes: RouteDef[] = [
   {
     method: 'GET',
     path: '/api/system/roles',
-    handler: () => systemAdminHandlers.listRoles(),
+    handler: (ctx) => systemAdminHandlers.listRoles(ctx),
   },
   {
     method: 'POST',
@@ -1149,6 +1285,12 @@ const routes: RouteDef[] = [
     path: '/api/system/roles/:id',
     handler: (ctx) => systemAdminHandlers.deleteRole(ctx),
   },
+  {
+    method: 'POST',
+    path: '/api/system/roles/:id/copy',
+    handler: (ctx) => systemAdminHandlers.copyRole(ctx),
+  },
+
   {
     method: 'GET',
     path: '/api/system/menus',
@@ -1190,6 +1332,11 @@ const routes: RouteDef[] = [
     handler: (ctx) => systemAdminHandlers.upsertOrg(ctx),
   },
   {
+    method: 'GET',
+    path: '/api/system/org/nodes/:key/check-delete',
+    handler: (ctx) => systemAdminHandlers.checkDeleteOrg(ctx),
+  },
+  {
     method: 'DELETE',
     path: '/api/system/org/nodes/:key',
     handler: (ctx) => systemAdminHandlers.deleteOrg(ctx),
@@ -1199,6 +1346,22 @@ const routes: RouteDef[] = [
     path: '/api/system/org/persons',
     handler: (ctx) => systemAdminHandlers.listOrgPersons(ctx),
   },
+  {
+    method: 'POST',
+    path: '/api/system/org/persons',
+    handler: (ctx) => systemAdminHandlers.upsertOrgPerson(ctx),
+  },
+  {
+    method: 'PUT',
+    path: '/api/system/org/persons/:id',
+    handler: (ctx) => systemAdminHandlers.upsertOrgPerson(ctx),
+  },
+  {
+    method: 'DELETE',
+    path: '/api/system/org/persons/:id',
+    handler: (ctx) => systemAdminHandlers.deleteOrgPerson(ctx),
+  },
+
   {
     method: 'GET',
     path: '/api/crowd-marketing/activities',
@@ -1215,6 +1378,7 @@ const routes: RouteDef[] = [
         onlyMine,
         pendingApprove,
         currentUser = 'demo',
+        center,
       } = params;
       let list = [...activities];
       if (catalog && catalog !== '所有' && catalog !== '全部') {
@@ -1225,6 +1389,7 @@ const routes: RouteDef[] = [
       }
       if (status && status !== '全部') list = list.filter((x) => x.status === status);
       if (creator) list = list.filter((x) => x.creator.includes(String(creator)));
+      if (center) list = list.filter((x) => (x.centers || []).includes(String(center)));
       if (periodic === '是') list = list.filter((x) => x.periodic);
       if (periodic === '否') list = list.filter((x) => !x.periodic);
       if (onlyPeriodic === 'true') list = list.filter((x) => x.periodic);
@@ -1232,7 +1397,10 @@ const routes: RouteDef[] = [
         list = list.filter((x) => x.mine || x.creator === currentUser);
       }
       if (pendingApprove === 'true') {
-        list = list.filter((x) => x.status === '待审批' && x.approver === currentUser);
+        const me = String(currentUser || '');
+        list = list.filter(
+          (x) => x.status === '待审批' && String(x.approver || '') === me,
+        );
       }
       return pageSliceMarketing(list, current, pageSize);
     },
@@ -1259,6 +1427,7 @@ const routes: RouteDef[] = [
         canEdit: true,
         canDelete: true,
         pinned: false,
+        centers: Array.isArray(body.centers) ? body.centers.map(String) : seedCenters(activities.length),
       };
       activities = [item, ...activities];
       appendAudit(creator, '创建活动', item.name);
@@ -1276,10 +1445,17 @@ const routes: RouteDef[] = [
           ...item,
           nodes: [
             { id: 'n1', name: '开始', type: '开始', config: '活动触发' },
-            { id: 'n2', name: '人群圈选', type: '人群', config: '静态人群 · 高价值客户' },
-            { id: 'n3', name: '合并去重', type: '处理', config: '按客户ID去重' },
-            { id: 'n4', name: '短信触达', type: '触达', config: '普通短信模板 A' },
-            { id: 'n5', name: '结束', type: '结束', config: '完成' },
+            {
+              id: 'n2',
+              name: '选人',
+              type: '人群',
+              config: '目标人群 · 高价值客户',
+            },
+            { id: 'n3', name: '发短信', type: '触达', config: '召回短信模板 A' },
+            { id: 'n4', name: '等待', type: '等待', config: '等待 3 天' },
+            { id: 'n5', name: '是否购买', type: '判断', config: '已购买 / 未购买' },
+            { id: 'n6', name: '小程序发券', type: '触达', config: '酒店满减券' },
+            { id: 'n7', name: '结束', type: '结束', config: '完成' },
           ],
         },
       };
@@ -1306,7 +1482,9 @@ const routes: RouteDef[] = [
       const item = findActivityRow(pathParams.id);
       if (!item) return { success: false, errorMessage: '活动不存在' };
       if (item.status !== '待审批') return { success: false, errorMessage: '仅待审批活动可通过' };
-      if (item.approver !== currentUser) return { success: false, errorMessage: '仅指定审批人可通过' };
+      if (String(item.approver || '') !== currentUser) {
+        return { success: false, errorMessage: '仅指定审批人可通过' };
+      }
       const patched = patchActivityRow(item.id, { status: '已通过' });
       appendAudit(currentUser, '审批通过', item.name);
       return { success: true, data: patched };
@@ -1320,7 +1498,9 @@ const routes: RouteDef[] = [
       const item = findActivityRow(pathParams.id);
       if (!item) return { success: false, errorMessage: '活动不存在' };
       if (item.status !== '待审批') return { success: false, errorMessage: '仅待审批活动可驳回' };
-      if (item.approver !== currentUser) return { success: false, errorMessage: '仅指定审批人可驳回' };
+      if (String(item.approver || '') !== currentUser) {
+        return { success: false, errorMessage: '仅指定审批人可驳回' };
+      }
       const patched = patchActivityRow(item.id, { status: '已驳回' });
       appendAudit(currentUser, '审批驳回', item.name);
       return {
@@ -1333,16 +1513,21 @@ const routes: RouteDef[] = [
   {
     method: 'POST',
     path: '/api/crowd-marketing/activities/:id/formal-run',
-    handler: ({ pathParams }) => {
+    handler: ({ pathParams, data }) => {
       const item = findActivityRow(pathParams.id);
       if (!item) return { success: false, errorMessage: '活动不存在' };
+      const actor = String((data as any)?.currentUser || 'demo');
       if (item.status === '已暂停') {
-        return { success: true, data: patchActivityRow(item.id, { status: '进行中' }) };
+        const patched = patchActivityRow(item.id, { status: '进行中' });
+        appendAudit(actor, '正式执行', `${item.name}（恢复）`);
+        return { success: true, data: patched };
       }
       if (item.status !== '已通过') {
         return { success: false, errorMessage: '须审批通过后才能正式执行' };
       }
-      return { success: true, data: patchActivityRow(item.id, { status: '进行中' }) };
+      const patched = patchActivityRow(item.id, { status: '进行中' });
+      appendAudit(actor, '正式执行', item.name);
+      return { success: true, data: patched };
     },
   },
   {
@@ -1429,7 +1614,7 @@ const routes: RouteDef[] = [
     method: 'GET',
     path: '/api/crowd-marketing/templates/local',
     handler: ({ params }) => {
-      const { current = 1, pageSize = 10, catalog, keyword, onlyMine, periodic } = params;
+      const { current = 1, pageSize = 10, catalog, keyword, onlyMine, periodic, center } = params;
       let list = [...localTemplates];
       if (catalog && catalog !== '所有' && catalog !== '全部') {
         list = list.filter((x) => x.catalog === catalog);
@@ -1439,6 +1624,7 @@ const routes: RouteDef[] = [
       }
       if (periodic === '是') list = list.filter((x) => x.periodic);
       if (periodic === '否') list = list.filter((x) => !x.periodic);
+      if (center) list = list.filter((x) => (x.centers || []).includes(String(center)));
       if (onlyMine === 'true') list = list.filter((x) => x.mine);
       return pageSliceMarketing(list, current, pageSize);
     },
@@ -1458,6 +1644,9 @@ const routes: RouteDef[] = [
         createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
         mine: true,
         periodic: !!body.periodic,
+        centers: Array.isArray(body.centers)
+          ? body.centers.map(String)
+          : seedCenters(localTemplates.length),
       };
       localTemplates = [item, ...localTemplates];
       return { success: true, data: item };
@@ -1494,12 +1683,14 @@ const routes: RouteDef[] = [
     method: 'GET',
     path: '/api/crowd-marketing/node-records',
     handler: ({ params }) => {
-      const { current = 1, pageSize = 10, activityName, status, periodic, startAtRange } = params;
+      const { current = 1, pageSize = 10, activityName, status, periodic, startAtRange, center } =
+        params;
       let list = [...activityExecRecords].sort((a, b) => (a.startAt < b.startAt ? 1 : -1));
       if (activityName) list = list.filter((x) => x.activityName.includes(String(activityName)));
       if (status && status !== '全部') list = list.filter((x) => x.status === status);
       if (periodic === '是') list = list.filter((x) => x.periodic);
       if (periodic === '否') list = list.filter((x) => !x.periodic);
+      if (center) list = list.filter((x) => (x.centers || []).includes(String(center)));
       if (startAtRange) {
         const range = String(startAtRange).split(',');
         if (range.length === 2) {
@@ -1512,6 +1703,126 @@ const routes: RouteDef[] = [
         }
       }
       return pageSliceMarketing(list, current, pageSize);
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/crowd-marketing/node-records/:id/report',
+    handler: ({ pathParams }) => {
+      const item =
+        activityExecRecords.find((r) => r.id === pathParams.id) || activityExecRecords[0];
+      const canShow = ['成功', '失败', '部分成功', '执行中'].includes(item.status);
+      if (!canShow) {
+        return {
+          success: true,
+          data: {
+            id: item.id,
+            activityId: item.activityId,
+            name: item.activityName,
+            status: item.status,
+            executed: false,
+            execStatus: item.status,
+            centers: item.centers,
+          },
+        };
+      }
+      const entered = item.targetCount;
+      const reachSuccess = item.reachSuccess;
+      const reachFail = item.reachFail;
+      return {
+        success: true,
+        data: {
+          id: item.id,
+          activityId: item.activityId,
+          name: item.activityName,
+          status: item.status,
+          executed: true,
+          execStatus: item.status === '执行中' ? '执行中' : '执行完成',
+          startAt: item.startAt || '2026-07-20 10:00:00',
+          endAt: item.endAt || (item.status === '执行中' ? '' : '2026-07-20 12:30:00'),
+          centers: item.centers,
+          summary: {
+            entered,
+            reachSuccess,
+            reachFail,
+            benefitIssued: Math.floor(reachSuccess * 0.08),
+          },
+          nodes: [
+            {
+              id: '1',
+              nodeName: '开始',
+              nodeType: '开始',
+              entered,
+              success: entered,
+              failed: 0,
+              duration: '1s',
+            },
+            {
+              id: '2',
+              nodeName: '人群圈选',
+              nodeType: '人群',
+              entered,
+              success: Math.floor(entered * 0.98),
+              failed: Math.floor(entered * 0.02),
+              duration: '45s',
+            },
+            {
+              id: '3',
+              nodeName: '小程序站内信',
+              nodeType: '触达',
+              entered: Math.floor(entered * 0.98),
+              success: reachSuccess,
+              failed: reachFail,
+              duration: item.status === '执行中' ? '进行中' : '2m',
+            },
+            {
+              id: '4',
+              nodeName: '结束',
+              nodeType: '结束',
+              entered: reachSuccess,
+              success: reachSuccess,
+              failed: 0,
+              duration: item.status === '执行中' ? '-' : '1s',
+            },
+          ],
+        },
+      };
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/tag-center/person-tags/detail',
+    handler: ({ params }) => {
+      const group = String(params.group || '');
+      const tag = String(params.tag || '');
+      const rule = tagRules.find((r) => r.targetTag.group === group && r.targetTag.tag === tag);
+      const count = rule?.lastRunCount || 128 + (group.length + tag.length) * 7;
+      const centers = rule?.centers?.length ? rule.centers : seedCenters(group.length);
+      const members = Array.from({ length: Math.min(count, 40) }, (_, i) => ({
+        id: `tm${i + 1}`,
+        oneId: mockOneId(i + 17),
+        name: ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九'][i % 7],
+        phoneMasked: `139****${String(2000 + i).slice(-4)}`,
+        centers: [centers[i % centers.length]],
+        source: i % 3 === 0 ? '规则打标' : i % 3 === 1 ? '活动二次打标' : '导入',
+        taggedAt: `2026-0${(i % 6) + 1}-${String(10 + (i % 15)).padStart(2, '0')} 11:${String(
+          (i * 3) % 60,
+        ).padStart(2, '0')}:00`,
+      }));
+      return {
+        success: true,
+        data: {
+          group,
+          tag,
+          count,
+          creator: rule?.creator || 'demo',
+          createdAt: rule?.createdAt || '2026-03-12 10:00:00',
+          updatedAt: rule?.updatedAt || rule?.lastRunAt || '2026-07-18 16:20:00',
+          centers,
+          ruleId: rule?.id,
+          members,
+        },
+      };
     },
   },
 ];

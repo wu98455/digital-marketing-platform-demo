@@ -129,6 +129,8 @@ export type StoredValueGroupFields = {
 
 export type UserBehaviorGroupFields = {
   timeNode?: string;
+  /** 浏览 / 加购 / 分享 等行为（支付退款归订单维） */
+  behaviorActions?: string[];
   eventCondition?: string;
   dataFeedback?: string;
   interactionBehavior?: string;
@@ -156,26 +158,32 @@ export type TagRuleConditions = {
   [K in DimKey]: DimConditions<K>;
 };
 
+export type PreviewSample = {
+  id: string;
+  memberId: string;
+  name: string;
+  phoneMasked: string;
+  /** 人员 OneID（中台） */
+  oneId?: string;
+  /** 所属分中心 */
+  centers?: string[];
+  /** 命中来源说明 */
+  source: string;
+};
+
 export type TagRule = {
   id: string;
   name: string;
   targetTag: { group: string; tag: string };
   conditions: TagRuleConditions;
+  /** 绑定分中心（可多选） */
+  centers?: string[];
   enabled: boolean;
   lastRunAt?: string;
   lastRunCount?: number;
   creator?: string;
   updatedAt: string;
   createdAt: string;
-};
-
-export type PreviewSample = {
-  id: string;
-  memberId: string;
-  name: string;
-  phoneMasked: string;
-  /** 命中来源说明 */
-  source: string;
 };
 
 export const CONDITION_OPS = [
@@ -276,16 +284,59 @@ export function tagKeyOf(group: string, tag: string) {
 
 export function samplesFromConditions(
   conditions?: TagRuleConditions | Record<string, unknown>,
+  centers?: string[],
 ): PreviewSample[] {
   const count = Math.min(5, estimateCount(conditions));
   const sources = describeConditionSources(conditions);
   const sourceStr = sources.join('；');
   const names = ['张三', '李四', '王五', '赵六', '钱七'];
+  const centerList = centers?.length ? centers : ['山城工惠'];
   return Array.from({ length: count }, (_, i) => ({
     id: `c${i + 1}`,
     memberId: `M${10000 + i}`,
     name: names[i] || `会员${i + 1}`,
     phoneMasked: `138****${String(1000 + i).slice(-4)}`,
+    oneId: `OID20260812${String(i + 1).padStart(4, '0')}`,
+    centers: [centerList[i % centerList.length]],
     source: sourceStr,
   }));
 }
+
+/** 预览 SQL 清单：按维度汇总已填筛选（供专业人士查看） */
+export function summarizeDimFilters(
+  conditions?: TagRuleConditions | Record<string, unknown>,
+): { dim: string; summary: string }[] {
+  const labels: Record<DimKey, string> = {
+    member: '会员',
+    order: '订单（含支付/退款）',
+    product: '商品与供应商',
+    combo: '联票与策略',
+    campaign: '活动专题',
+    coupon: '优惠券',
+    points: '积分商城',
+    storedValue: '优品/储值卡',
+    userBehavior: '用户行为（浏览/加购/分享等）',
+  };
+  const c = (conditions || {}) as Partial<TagRuleConditions>;
+  const rows: { dim: string; summary: string }[] = [];
+  (Object.keys(labels) as DimKey[]).forEach((dim) => {
+    const groups = c[dim]?.groups || [];
+    const parts: string[] = [];
+    groups.forEach((g, i) => {
+      const entries = Object.entries(g as Record<string, unknown>).filter(([, v]) => {
+        if (v === undefined || v === null || v === '') return false;
+        if (Array.isArray(v)) return v.length > 0;
+        if (typeof v === 'object') return filledCount(v as Record<string, unknown>) > 0;
+        return true;
+      });
+      if (!entries.length) return;
+      const text = entries
+        .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('/') : JSON.stringify(v)}`)
+        .join('，');
+      parts.push(`组${i + 1}：${text}`);
+    });
+    if (parts.length) rows.push({ dim: labels[dim], summary: parts.join('；') });
+  });
+  return rows.length ? rows : [{ dim: '（未配置）', summary: '尚未勾选维度筛选条件' }];
+}
+

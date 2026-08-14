@@ -15,7 +15,7 @@ const FailResult: React.FC = () => {
             <Button type="primary" key="console" onClick={() => history.push('/form/basic-form')}>
               返回修改
             </Button>,
-            <Button key="buy" onClick={() => history.push('/welcome')}>
+            <Button key="buy" onClick={() => history.push('/tag-center/list')}>
               返回首页
             </Button>,
           ]}

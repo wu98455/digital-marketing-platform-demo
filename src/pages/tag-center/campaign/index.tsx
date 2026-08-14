@@ -1,17 +1,21 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
-import { request } from '@umijs/max';
-import { Alert, Button, message } from 'antd';
+import { history, request } from '@umijs/max';
+import { Button } from 'antd';
 import React, { useRef, useState } from 'react';
+import CenterTags from '@/components/CenterTags';
+import TitleWithTip from '@/components/TitleWithTip';
 import {
   TagChips,
   TagLibraryDrawer,
+  TagPickerModal,
   remapTagInOverrides,
   removeTagFromOverrides,
   tagKey,
   useTagCatalog,
   type TagItem,
 } from '@/components/Tagging';
+import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
 import { goDataTagCreate } from '../utils/dataTagCreate';
 
@@ -24,6 +28,7 @@ type CampaignItem = {
   endAt: string;
   status: string;
   tags?: TagItem[];
+  centers?: string[];
 };
 
 /** 演示用量统计用的种子行（与 mock A1001–A1005 对齐） */
@@ -61,6 +66,9 @@ const CampaignTaggingPage: React.FC = () => {
   const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
   const [selectedRows, setSelectedRows] = useState<CampaignItem[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerRow, setPickerRow] = useState<CampaignItem | null>(null);
+  const [pickerValue, setPickerValue] = useState<TagItem[]>([]);
 
   const getTags = (row: CampaignItem) => tagOverrides[row.id] || row.tags || seedTags(row);
 
@@ -74,8 +82,11 @@ const CampaignTaggingPage: React.FC = () => {
     return n;
   };
 
-  const goTagRow = (row: CampaignItem) =>
-    goDataTagCreate('campaign', [{ id: row.id, name: row.name }]);
+  const openTagPicker = (row: CampaignItem) => {
+    setPickerRow(row);
+    setPickerValue(getTags(row));
+    setPickerOpen(true);
+  };
 
   const columns: ProColumns<CampaignItem>[] = [
     { title: '活动名称', dataIndex: 'nameSearch', hideInTable: true },
@@ -105,6 +116,13 @@ const CampaignTaggingPage: React.FC = () => {
         已结束: { text: '已结束' },
       },
     },
+    {
+      title: '分中心',
+      dataIndex: 'centerSearch',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
+    },
     { title: '活动名称', dataIndex: 'name', search: false },
     { title: '活动ID', dataIndex: 'id', search: false, width: 100 },
     { title: '类型', dataIndex: 'type', search: false, width: 100 },
@@ -127,7 +145,18 @@ const CampaignTaggingPage: React.FC = () => {
       },
     },
     {
-      title: '已打标签',
+      title: '分中心',
+      dataIndex: 'centers',
+      search: false,
+      width: 180,
+      render: (_, row) => {
+        const idx = SEED_CAMPAIGN_ROWS.findIndex((c) => c.id === row.id);
+        const fallback = [MARKETING_CENTERS[(idx >= 0 ? idx : 0) % MARKETING_CENTERS.length]];
+        return <CenterTags centers={row.centers?.length ? row.centers : fallback} />;
+      },
+    },
+    {
+      title: '标签',
       dataIndex: 'tags',
       search: false,
       width: 240,
@@ -135,7 +164,8 @@ const CampaignTaggingPage: React.FC = () => {
         <TagChips
           tags={getTags(row)}
           catalog={catalog}
-          onClick={() => goTagRow(row)}
+          emptyText="点击打标"
+          onClick={() => openTagPicker(row)}
         />
       ),
     },
@@ -145,11 +175,14 @@ const CampaignTaggingPage: React.FC = () => {
       search: false,
       width: 120,
       render: (_, row) => [
-        <a key="tag" onClick={() => goTagRow(row)}>
+        <a
+          key="tag"
+          onClick={() => goDataTagCreate('campaign', [{ id: row.id, name: row.name }])}
+        >
           打标
         </a>,
-        <a key="view" onClick={() => message.info(`查看专题活动「${row.name}」（演示）`)}>
-          查看
+        <a key="view" onClick={() => history.push(`/tag-center/campaign/view/${row.id}`)}>
+          详情
         </a>,
       ],
     },
@@ -157,15 +190,13 @@ const CampaignTaggingPage: React.FC = () => {
 
   return (
     <PageContainer title={false}>
-      <Alert
-        type="info"
-        showIcon
-        closable
-        style={{ marginBottom: 16 }}
-        message="「专题活动」是可打标的活动主数据；自动化流程请到「营销管理 · 营销活动」画布。"
-      />
       <ProTable<CampaignItem>
-        headerTitle="专题活动 · 打标"
+        headerTitle={
+          <TitleWithTip
+            title="专题活动 · 打标"
+            tip="「专题活动」是可打标的活动主数据；自动化流程请到「营销管理 · 营销活动」画布。"
+          />
+        }
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -205,6 +236,14 @@ const CampaignTaggingPage: React.FC = () => {
           if (params.statusSearch && params.statusSearch !== '不限') {
             data = data.filter((x) => x.status === params.statusSearch);
           }
+          if (params.centerSearch) {
+            data = data.filter((x, idx) => {
+              const centers = x.centers?.length
+                ? x.centers
+                : [MARKETING_CENTERS[idx % MARKETING_CENTERS.length]];
+              return centers.includes(String(params.centerSearch));
+            });
+          }
           return { ...res, data, total: data.length };
         }}
       />
@@ -232,6 +271,18 @@ const CampaignTaggingPage: React.FC = () => {
             return removeTagFromOverrides(base, item);
           });
           actionRef.current?.reload();
+        }}
+      />
+      <TagPickerModal
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title={`打标签 · ${pickerRow?.name || ''}`}
+        catalog={catalog}
+        mode="replace"
+        value={pickerValue}
+        onSave={(next) => {
+          if (!pickerRow) return;
+          setTagOverrides((prev) => ({ ...prev, [pickerRow.id]: next }));
         }}
       />
     </PageContainer>

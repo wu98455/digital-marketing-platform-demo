@@ -6,19 +6,31 @@ import {
   StepsForm,
 } from '@ant-design/pro-components';
 import { history, request, useParams } from '@umijs/max';
-import { Button, Input, Modal, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Form, Input, Modal, Space, Table, Tabs, Tag, Typography, message } from 'antd';
 import React, { useEffect, useMemo, useState } from 'react';
 import { colorForGroup, useTagCatalog } from '@/components/Tagging';
 import type { PreviewSample, TagRule, TagRuleConditions } from '@/utils/tagRuleTypes';
-import { emptyTagRuleConditions } from '@/utils/tagRuleTypes';
+import {
+  emptyTagRuleConditions,
+  summarizeDimFilters,
+} from '@/utils/tagRuleTypes';
+import { pageHeader } from '@/utils/pageHeader';
+import { useAllowedCenters } from '@/utils/useAllowedCenters';
 import TagRuleConditionsEditor from '../components/TagRuleConditionsEditor';
 
 function downloadCsv(filename: string, rows: PreviewSample[]) {
-  const header = ['会员ID', '姓名', '手机', '来源'];
+  const header = ['OneID', '会员ID', '姓名', '手机', '分中心', '来源'];
   const lines = [
     header.join(','),
     ...rows.map((r) =>
-      [r.memberId, r.name, r.phoneMasked, `"${(r.source || '').replace(/"/g, '""')}"`].join(','),
+      [
+        r.oneId || '',
+        r.memberId,
+        r.name,
+        r.phoneMasked,
+        (r.centers || []).join('|'),
+        `"${(r.source || '').replace(/"/g, '""')}"`,
+      ].join(','),
     ),
   ];
   const blob = new Blob([`\ufeff${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
@@ -38,6 +50,7 @@ const TagCreatePage: React.FC = () => {
 
   const { getCatalog, addGroup, renameGroup, deleteGroup, addTag } = useTagCatalog();
   const catalog = getCatalog('customer');
+  const { options: centerOptions } = useAllowedCenters();
   const groupOptions = useMemo(
     () => catalog.map((g) => ({ label: g.group, value: g.group })),
     [catalog],
@@ -45,19 +58,53 @@ const TagCreatePage: React.FC = () => {
 
   const [category, setCategory] = useState(editGroup || groupOptions[0]?.value || '客户价值');
   const [tagName, setTagName] = useState(editTag || '');
+  const [tagNameError, setTagNameError] = useState<string>();
   const [remark, setRemark] = useState('');
+  const [centers, setCenters] = useState<string[]>(
+    centerOptions.length ? [centerOptions[0].value] : [],
+  );
   const [ruleId, setRuleId] = useState<string>();
   const [conditions, setConditions] = useState<TagRuleConditions>(emptyTagRuleConditions());
   const [previewCount, setPreviewCount] = useState<number>();
   const [samples, setSamples] = useState<PreviewSample[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [sqlOpen, setSqlOpen] = useState(false);
   const [categoryModal, setCategoryModal] = useState<{
     mode: 'add' | 'edit';
     open: boolean;
     name: string;
   }>({ mode: 'add', open: false, name: '' });
 
+  const checkTagNameDup = (raw: string) => {
+    const n = raw.trim();
+    if (!n || isEdit) {
+      setTagNameError(undefined);
+      return false;
+    }
+    const dup = catalog.some((g) => g.tags.includes(n));
+    setTagNameError(dup ? '标签名称已存在，请换一个名称' : undefined);
+    return dup;
+  };
+
   const resolvedCategory = category;
+
+  const sqlRows = useMemo(() => {
+    const dimRows = summarizeDimFilters(conditions);
+    return centers.flatMap((center) =>
+      dimRows.map((d) => ({
+        key: `${center}-${d.dim}`,
+        center,
+        dim: d.dim,
+        summary: d.summary,
+      })),
+    );
+  }, [centers, conditions]);
+
+  useEffect(() => {
+    if (!centers.length && centerOptions.length) {
+      setCenters([centerOptions[0].value]);
+    }
+  }, [centerOptions, centers.length]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -70,6 +117,7 @@ const TagCreatePage: React.FC = () => {
       if (hit) {
         setRuleId(hit.id);
         setRemark(`规则：${hit.name}`);
+        if (hit.centers?.length) setCenters(hit.centers);
         setConditions({
           ...emptyTagRuleConditions(),
           ...hit.conditions,
@@ -90,7 +138,7 @@ const TagCreatePage: React.FC = () => {
   const doPreview = async () => {
     const res = await request<{ data: { count: number; samples: PreviewSample[] } }>(
       '/api/tag-center/rules/preview',
-      { method: 'POST', data: { conditions } },
+      { method: 'POST', data: { conditions, centers } },
     );
     setPreviewCount(res.data?.count);
     setSamples(res.data?.samples || []);
@@ -123,7 +171,7 @@ const TagCreatePage: React.FC = () => {
       if (currentRuleId) {
         await request(`/api/tag-center/rules/${currentRuleId}`, {
           method: 'PUT',
-          data: { name: ruleName, targetTag, conditions, enabled: true },
+          data: { name: ruleName, targetTag, conditions, centers, enabled: true },
         });
       } else {
         const saveRes = await request<{
@@ -132,7 +180,7 @@ const TagCreatePage: React.FC = () => {
           errorMessage?: string;
         }>('/api/tag-center/rules', {
           method: 'POST',
-          data: { name: ruleName, targetTag, conditions, enabled: true },
+          data: { name: ruleName, targetTag, conditions, centers, enabled: true },
         });
         if (saveRes?.success === false) {
           message.error(saveRes.errorMessage || '保存失败');
@@ -217,8 +265,15 @@ const TagCreatePage: React.FC = () => {
 
   return (
     <PageContainer
-      title={isEdit ? '编辑标签' : '新建标签'}
-      onBack={() => history.push('/tag-center/list')}
+      {...pageHeader({
+        title: isEdit ? '编辑标签' : '新建标签',
+        backTo: '/tag-center/list',
+        crumbs: [
+          { title: '数据打标', path: '/tag-center/list' },
+          { title: '人群标签', path: '/tag-center/list' },
+          { title: isEdit ? '编辑标签' : '新建标签' },
+        ],
+      })}
     >
       <StepsForm
         onFinish={handleFinish}
@@ -254,6 +309,9 @@ const TagCreatePage: React.FC = () => {
                     确认打标
                   </Button>
                 )}
+                {step === 1 ? (
+                  <Button onClick={() => setSqlOpen(true)}>预览 SQL</Button>
+                ) : null}
                 <Button onClick={() => history.push('/tag-center/list')}>取消</Button>
               </Space>
             );
@@ -269,10 +327,12 @@ const TagCreatePage: React.FC = () => {
             category: editGroup || groupOptions[0]?.value,
             tagName: editTag || '',
             remark: '',
+            centers: centerOptions[0] ? [centerOptions[0].value] : [],
           }}
           onFinish={async (values) => {
             const cat = String(values.category || category || '').trim();
-            if (!String(values.tagName || tagName || '').trim()) {
+            const name = String(values.tagName || tagName || '').trim();
+            if (!name) {
               message.warning('请填写标签名称');
               return false;
             }
@@ -280,9 +340,21 @@ const TagCreatePage: React.FC = () => {
               message.warning('请选择分类');
               return false;
             }
+            if (!isEdit) {
+              if (checkTagNameDup(name)) {
+                message.error('标签名称已存在，请换一个名称');
+                return false;
+              }
+            }
+            const nextCenters = (values.centers as string[]) || centers;
+            if (!nextCenters?.length) {
+              message.warning('请选择分中心');
+              return false;
+            }
             setCategory(cat);
-            setTagName(String(values.tagName || tagName || '').trim());
+            setTagName(name);
             setRemark(String(values.remark || ''));
+            setCenters(nextCenters);
             return true;
           }}
         >
@@ -294,17 +366,43 @@ const TagCreatePage: React.FC = () => {
             }}
           >
             <div style={{ width: '100%', maxWidth: 520 }}>
-              <ProFormText
-                name="tagName"
+              <Form.Item
                 label="标签名称"
-                placeholder="如：沉睡召回"
-                disabled={isEdit}
-                rules={[{ required: true, message: '请填写标签名称' }]}
+                required
+                validateStatus={tagNameError ? 'error' : undefined}
+                help={tagNameError || undefined}
+              >
+                <Input
+                  value={tagName}
+                  placeholder="如：沉睡召回"
+                  disabled={isEdit}
+                  status={tagNameError ? 'error' : undefined}
+                  allowClear
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setTagName(v);
+                    checkTagNameDup(v);
+                  }}
+                  onBlur={() => checkTagNameDup(tagName)}
+                  style={{ maxWidth: 328 }}
+                />
+              </Form.Item>
+              {/* 同步到 StepsForm 校验用 */}
+              <ProFormText name="tagName" hidden initialValue={tagName} fieldProps={{ value: tagName }} />
+              <ProFormSelect
+                name="centers"
+                label="分中心"
+                options={centerOptions}
+                rules={[{ required: true, message: '请选择分中心' }]}
                 width="md"
                 fieldProps={{
-                  value: tagName,
-                  onChange: (e) => setTagName(e.target.value),
+                  mode: 'multiple',
+                  placeholder: centerOptions.length ? '请选择分中心' : '当前角色未配置分中心权限',
+                  value: centers,
+                  onChange: (v: string[]) => setCenters(v || []),
+                  disabled: !centerOptions.length,
                 }}
+                extra="选项来自角色「数据权限 · 分中心」；可多选"
               />
               <div style={{ marginBottom: 24 }}>
                 <div style={{ marginBottom: 8 }}>
@@ -355,7 +453,14 @@ const TagCreatePage: React.FC = () => {
           stepProps={{ description: '按维度筛人' }}
           style={{ width: '100%', maxWidth: '100%' }}
           onFinish={async () => {
+            if (!centers.length) {
+              message.warning('请先在标签信息中选择分中心');
+              return false;
+            }
+            message.loading({ content: '正在按分中心向数据中台下发筛选…', key: 'mid', duration: 0 });
+            await new Promise((r) => setTimeout(r, 400));
             await doPreview();
+            message.success({ content: '中台已返回预估结果', key: 'mid' });
             return true;
           }}
         >
@@ -375,6 +480,10 @@ const TagCreatePage: React.FC = () => {
             </Tag>
             分类：
             <Typography.Text strong>{isEdit ? editGroup : resolvedCategory}</Typography.Text>
+            <span style={{ marginLeft: 12 }}>
+              分中心：
+              <Typography.Text strong>{centers.join('、') || '--'}</Typography.Text>
+            </span>
             <Button type="link" onClick={doPreview}>
               刷新预估
             </Button>
@@ -395,15 +504,58 @@ const TagCreatePage: React.FC = () => {
             rowKey="id"
             dataSource={samples}
             columns={[
-              { title: '会员ID', dataIndex: 'memberId', width: 120 },
-              { title: '姓名', dataIndex: 'name', width: 100 },
-              { title: '手机', dataIndex: 'phoneMasked', width: 130 },
+              { title: '人员 OneID', dataIndex: 'oneId', width: 160 },
+              { title: '会员ID', dataIndex: 'memberId', width: 100 },
+              { title: '姓名', dataIndex: 'name', width: 80 },
+              { title: '手机', dataIndex: 'phoneMasked', width: 120 },
+              {
+                title: '分中心',
+                dataIndex: 'centers',
+                width: 120,
+                render: (v: string[]) => (v || []).join('、') || '--',
+              },
               { title: '来源', dataIndex: 'source', ellipsis: true },
             ]}
             locale={{ emptyText: '进入本步时已预估；也可点「刷新预估」' }}
           />
         </StepsForm.StepForm>
       </StepsForm>
+
+      <Modal
+        title="预览 SQL（说明清单）"
+        open={sqlOpen}
+        onCancel={() => setSqlOpen(false)}
+        footer={[
+          <Button key="ok" type="primary" onClick={() => setSqlOpen(false)}>
+            知道了
+          </Button>,
+        ]}
+        width={720}
+        destroyOnHidden
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          将按分中心 + 维度条件以 SQL 形式访问数据中台筛选。
+        </Typography.Paragraph>
+        <Tabs
+          items={(centers.length ? centers : ['未选分中心']).map((center) => ({
+            key: center,
+            label: center,
+            children: (
+              <Table
+                size="small"
+                pagination={false}
+                rowKey="key"
+                dataSource={sqlRows.filter((r) => r.center === center)}
+                columns={[
+                  { title: '维度', dataIndex: 'dim', width: 160 },
+                  { title: '筛选条件', dataIndex: 'summary', ellipsis: true },
+                ]}
+                locale={{ emptyText: '该分中心暂无维度条件摘要' }}
+              />
+            ),
+          }))}
+        />
+      </Modal>
 
       <Modal
         title={categoryModal.mode === 'add' ? '新增分类' : '编辑分类'}

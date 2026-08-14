@@ -93,6 +93,32 @@ export default defineConfig({
    */
   fastRefresh: true,
   /**
+   * Windows + 频繁改文件时，MFSU eager 容易把 worker 拖挂（表现为 localhost 突然打不开）。
+   * 改用 normal：首次略慢，热更更稳。仍挂可临时 mfsu: false。
+   */
+  mfsu: {
+    strategy: 'normal',
+  },
+  /**
+   * 避免 Watchpack 扫到盘符根目录的系统文件（DumpStack.log.tmp / pagefile.sys），
+   * 在 Windows 上常见 EINVAL，严重时拖垮 watcher。
+   */
+  chainWebpack(memo) {
+    memo.watchOptions({
+      ignored: [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/src/.umi/**',
+        '**/src/.umi-production/**',
+        '**/DumpStack.log.tmp',
+        '**/pagefile.sys',
+        '**/hiberfil.sys',
+        '**/swapfile.sys',
+      ],
+    });
+    return memo;
+  },
+  /**
    * @name 路由预加载
    * @description 预加载路由资源，提升页面切换速度
    * @doc https://umijs.org/docs/api/config#routePrefetch

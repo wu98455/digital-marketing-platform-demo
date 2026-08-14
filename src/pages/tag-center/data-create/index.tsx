@@ -6,15 +6,16 @@ import type { CatalogKind } from '@/components/Tagging';
 import { colorForGroup, useTagCatalog } from '@/components/Tagging';
 import type { PreviewSample, TagRule, TagRuleConditions } from '@/utils/tagRuleTypes';
 import { emptyTagRuleConditions } from '@/utils/tagRuleTypes';
+import { pageHeader } from '@/utils/pageHeader';
 import TagRuleConditionsEditor from '../components/TagRuleConditionsEditor';
 
 const KIND_META: Record<
   CatalogKind,
   { label: string; listPath: string; tagPrefix: string }
 > = {
-  customer: { label: '客户', listPath: '/tag-center/customer', tagPrefix: '客户' },
-  store: { label: '店铺', listPath: '/tag-center/store', tagPrefix: '店铺' },
-  product: { label: '商品', listPath: '/tag-center/product', tagPrefix: '商品' },
+  customer: { label: '人员数据', listPath: '/tag-center/customer', tagPrefix: '人员' },
+  store: { label: '店铺数据', listPath: '/tag-center/store', tagPrefix: '店铺' },
+  product: { label: '商品数据', listPath: '/tag-center/product', tagPrefix: '商品' },
   campaign: { label: '专题活动', listPath: '/tag-center/campaign', tagPrefix: '活动' },
 };
 
@@ -147,7 +148,17 @@ const DataTagCreatePage: React.FC = () => {
   if (!selectedIds.length) return null;
 
   return (
-    <PageContainer title={`${meta.label} · 批量打标`} onBack={() => history.push(meta.listPath)}>
+    <PageContainer
+      {...pageHeader({
+        title: `${meta.label} · 批量打标`,
+        backTo: meta.listPath,
+        crumbs: [
+          { title: '数据打标', path: '/tag-center/list' },
+          { title: meta.label, path: meta.listPath },
+          { title: '批量打标' },
+        ],
+      })}
+    >
       <Alert
         type="info"
         showIcon

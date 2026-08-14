@@ -1,10 +1,21 @@
+import { StarFilled, StarOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
-import { history, request } from '@umijs/max';
-import { Button, Modal, Space, Tag, message } from 'antd';
+import { history, request, useModel } from '@umijs/max';
+import { Button, Modal, Space, Tabs, Tag, message } from 'antd';
 import React, { useMemo, useRef, useState } from 'react';
+import CenterTags from '@/components/CenterTags';
 import { colorForGroup, flattenGroups, useTagCatalog } from '@/components/Tagging';
+import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
+import {
+  getFavoriteTagKeys,
+  getRecentTagKeys,
+  isFavoriteTag,
+  pushRecentTag,
+  tagIdentity,
+  toggleFavoriteTag,
+} from '@/utils/tagFavorites';
 
 type PersonTagRow = {
   key: string;
@@ -15,10 +26,13 @@ type PersonTagRow = {
   createdAt: string;
   updatedAt?: string;
   ruleId?: string;
+  centers: string[];
 };
 
 const TagListPage: React.FC = () => {
   const actionRef = useRef<ActionType | null>(null);
+  const { initialState } = useModel('@@initialState');
+  const username = initialState?.currentUser?.username as string | undefined;
   const { getCatalog, deleteTag } = useTagCatalog();
   const catalog = getCatalog('customer');
   const categoryOptions = useMemo(() => {
@@ -29,6 +43,8 @@ const TagListPage: React.FC = () => {
     return m;
   }, [catalog]);
   const [pageInfo, setPageInfo] = useState({ current: 1, pageSize: 10 });
+  const [tab, setTab] = useState<'all' | 'recent' | 'fav'>('recent');
+  const [favTick, setFavTick] = useState(0);
 
   const runAgain = async (row: PersonTagRow) => {
     let id = row.ruleId;
@@ -74,6 +90,13 @@ const TagListPage: React.FC = () => {
       hideInTable: true,
     },
     {
+      title: '分中心',
+      dataIndex: 'centerSearch',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
+    },
+    {
       title: '创建时间',
       dataIndex: 'createdAtRange',
       hideInTable: true,
@@ -96,12 +119,36 @@ const TagListPage: React.FC = () => {
       title: '标签名称',
       dataIndex: 'tag',
       search: false,
-      width: 160,
-      render: (_, row) => (
-        <Tag color={colorForGroup(row.group, catalog)} style={{ marginInlineEnd: 0 }}>
-          {row.tag}
-        </Tag>
-      ),
+      width: 180,
+      render: (_, row) => {
+        const fav = isFavoriteTag(row.group, row.tag, username);
+        return (
+          <Space size={6}>
+            <a
+              onClick={(e) => {
+                e.preventDefault();
+                toggleFavoriteTag(row.group, row.tag, username);
+                setFavTick((t) => t + 1);
+              }}
+              title={fav ? '取消收藏' : '收藏'}
+            >
+              {fav ? <StarFilled style={{ color: '#faad14' }} /> : <StarOutlined />}
+            </a>
+            <a
+              onClick={() => {
+                pushRecentTag(row.group, row.tag, username);
+                history.push(
+                  `/tag-center/detail/${encodeURIComponent(row.group)}/${encodeURIComponent(row.tag)}`,
+                );
+              }}
+            >
+              <Tag color={colorForGroup(row.group, catalog)} style={{ marginInlineEnd: 0 }}>
+                {row.tag}
+              </Tag>
+            </a>
+          </Space>
+        );
+      },
     },
     {
       title: '分类',
@@ -115,6 +162,13 @@ const TagListPage: React.FC = () => {
       dataIndex: 'count',
       search: false,
       width: 100,
+    },
+    {
+      title: '分中心',
+      dataIndex: 'centers',
+      search: false,
+      width: 200,
+      render: (_, row) => <CenterTags centers={row.centers} />,
     },
     {
       title: '创建人',
@@ -138,16 +192,27 @@ const TagListPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 180,
+      width: 240,
       fixed: 'right',
       render: (_, row) => (
         <Space size={8}>
           <a
-            onClick={() =>
+            onClick={() => {
+              pushRecentTag(row.group, row.tag, username);
+              history.push(
+                `/tag-center/detail/${encodeURIComponent(row.group)}/${encodeURIComponent(row.tag)}`,
+              );
+            }}
+          >
+            详情
+          </a>
+          <a
+            onClick={() => {
+              pushRecentTag(row.group, row.tag, username);
               history.push(
                 `/tag-center/edit/${encodeURIComponent(row.group)}/${encodeURIComponent(row.tag)}`,
-              )
-            }
+              );
+            }}
           >
             编辑
           </a>
@@ -174,11 +239,25 @@ const TagListPage: React.FC = () => {
 
   return (
     <PageContainer title={false}>
+      <Tabs
+        activeKey={tab}
+        onChange={(k) => {
+          setTab(k as typeof tab);
+          actionRef.current?.reload();
+        }}
+        items={[
+          { key: 'recent', label: '最近常用' },
+          { key: 'all', label: '总标签库' },
+          { key: 'fav', label: '个人收藏' },
+        ]}
+        style={{ marginBottom: 8 }}
+      />
       <ProTable<PersonTagRow>
         headerTitle="人群标签"
         actionRef={actionRef}
         rowKey="key"
         columns={columns}
+        params={{ tab, favTick }}
         search={listSearchProps}
         pagination={{
           ...listPagination,
@@ -187,7 +266,7 @@ const TagListPage: React.FC = () => {
           onChange: (current: number, pageSize: number) =>
             setPageInfo({ current, pageSize: pageSize || pageInfo.pageSize }),
         } as any}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1300 }}
         toolBarRender={() => [
           <Button key="new" type="primary" onClick={() => history.push('/tag-center/create')}>
             新建标签
@@ -203,6 +282,7 @@ const TagListPage: React.FC = () => {
               updatedAt?: string;
               creator?: string;
               createdAt?: string;
+              centers?: string[];
             }[];
           }>('/api/tag-center/person-tags');
           const cover: Record<
@@ -213,6 +293,7 @@ const TagListPage: React.FC = () => {
               updatedAt?: string;
               creator?: string;
               createdAt?: string;
+              centers?: string[];
             }
           > = {};
           (res.data || []).forEach((row) => {
@@ -233,6 +314,9 @@ const TagListPage: React.FC = () => {
               createdAt: c?.createdAt || `2026-0${(i % 6) + 1}-12 10:00:00`,
               updatedAt: c?.updatedAt,
               ruleId: c?.ruleId,
+              centers: c?.centers?.length
+                ? c.centers
+                : [MARKETING_CENTERS[i % MARKETING_CENTERS.length]],
             };
           });
           if (params.keyword) {
@@ -244,6 +328,9 @@ const TagListPage: React.FC = () => {
           }
           if (params.creatorSearch) {
             list = list.filter((x) => x.creator.includes(String(params.creatorSearch)));
+          }
+          if (params.centerSearch) {
+            list = list.filter((x) => x.centers.includes(String(params.centerSearch)));
           }
           const inRange = (value: string | undefined, range?: string[]) => {
             if (!range?.[0] || !range?.[1]) return true;
@@ -258,6 +345,20 @@ const TagListPage: React.FC = () => {
             list = list.filter((x) =>
               inRange(x.updatedAt || x.createdAt, params.updatedAtRange as string[]),
             );
+          }
+          if (tab === 'fav') {
+            const fav = new Set(getFavoriteTagKeys(username));
+            list = list.filter((x) => fav.has(tagIdentity(x.group, x.tag)));
+          } else if (tab === 'recent') {
+            const recent = getRecentTagKeys(username);
+            const order = new Map(recent.map((k, i) => [k, i]));
+            list = list
+              .filter((x) => order.has(tagIdentity(x.group, x.tag)))
+              .sort(
+                (a, b) =>
+                  (order.get(tagIdentity(a.group, a.tag)) ?? 99) -
+                  (order.get(tagIdentity(b.group, b.tag)) ?? 99),
+              );
           }
           return { data: list, success: true, total: list.length };
         }}

@@ -3,6 +3,8 @@
  * 浏览器端持久化到 localStorage；Umi mock（Node）仅用内存。
  */
 
+import { MARKETING_CENTERS, type MarketingCenter, normalizeCenters } from './centers';
+
 export type RoleId = string;
 
 export type MenuAccessKey = string;
@@ -34,6 +36,8 @@ export type SystemRole = {
   description: string;
   menus: MenuAccessKey[];
   operations: OpPermission[];
+  /** 数据权限：分中心（多选） */
+  centers: MarketingCenter[];
 };
 
 export type MenuTreeNode = {
@@ -54,6 +58,8 @@ export type AuditLog = {
   actor: string;
   action: string;
   detail?: string;
+  /** 关联分中心；演示数据可空，列表显示 -- */
+  centers?: string[];
 };
 
 export type OrgNodeType = '组织' | '部门';
@@ -74,12 +80,14 @@ export type OrgPerson = {
   status: '在职' | '离职';
 };
 
-const USERS_KEY = 'dmp-system-users';
-const ROLES_KEY = 'dmp-system-roles';
-const MENU_TREE_KEY = 'dmp-system-menu-tree-v4';
+const USERS_KEY = 'dmp-system-users-v2';
+const ROLES_KEY = 'dmp-system-roles-v2';
+const MENU_TREE_KEY = 'dmp-system-menu-tree-v9';
 const AUDIT_KEY = 'dmp-system-audit';
-const ORG_TREE_KEY = 'dmp-system-org-tree-v1';
-const ORG_PERSONS_KEY = 'dmp-system-org-persons-v1';
+const ORG_TREE_KEY = 'dmp-system-org-tree-v3';
+const ORG_PERSONS_KEY = 'dmp-system-org-persons-v3';
+
+const ALL_CENTERS: MarketingCenter[] = [...MARKETING_CENTERS];
 
 const ALL_MENUS: MenuAccessKey[] = [
   'welcome',
@@ -116,6 +124,7 @@ export const DEFAULT_ROLES: SystemRole[] = [
       'activity.execute',
       'system.manage',
     ],
+    centers: [...ALL_CENTERS],
   },
   {
     id: 'tagger',
@@ -123,6 +132,7 @@ export const DEFAULT_ROLES: SystemRole[] = [
     description: '人群标签与目标人群读写',
     menus: ['welcome', 'tag-center', 'crowd'],
     operations: ['tag.write', 'crowd.write'],
+    centers: ['长寿工惠', '山城工惠'],
   },
   {
     id: 'marketer',
@@ -138,6 +148,7 @@ export const DEFAULT_ROLES: SystemRole[] = [
       'node-record',
     ],
     operations: ['activity.write', 'activity.approve', 'activity.execute'],
+    centers: ['山城工惠', '国企优品', '文旅惠'],
   },
 ];
 
@@ -157,7 +168,7 @@ export const DEFAULT_USERS: SystemUser[] = [
     id: 'u-admin',
     username: 'admin',
     name: '系统管理员',
-    password: 'ant.design',
+    password: '123456',
     status: '启用',
     roleId: 'admin',
     approverIds: ['demo', 'WangSiyi'],
@@ -207,7 +218,14 @@ export const DEFAULT_USERS: SystemUser[] = [
 ];
 
 export const DEFAULT_MENU_TREE: MenuTreeNode[] = [
-  { key: 'welcome', path: '/welcome', name: '欢迎', icon: 'HomeOutlined', builtin: true, order: 0 },
+  {
+    key: 'welcome',
+    path: '/welcome',
+    name: '经营分析',
+    icon: 'HomeOutlined',
+    builtin: true,
+    order: 0,
+  },
   {
     key: 'tag-center',
     path: '/tag-center',
@@ -226,21 +244,21 @@ export const DEFAULT_MENU_TREE: MenuTreeNode[] = [
       {
         key: 'tag-center-customer',
         path: '/tag-center/customer',
-        name: '客户',
+        name: '人员数据',
         builtin: true,
         order: 1,
       },
       {
         key: 'tag-center-store',
         path: '/tag-center/store',
-        name: '店铺',
+        name: '店铺数据',
         builtin: true,
         order: 2,
       },
       {
         key: 'tag-center-product',
         path: '/tag-center/product',
-        name: '商品',
+        name: '商品数据',
         builtin: true,
         order: 3,
       },
@@ -295,9 +313,9 @@ export const DEFAULT_MENU_TREE: MenuTreeNode[] = [
     children: [
       { key: 'system-users', path: '/system/users', name: '用户管理', builtin: true, order: 0 },
       { key: 'system-roles', path: '/system/roles', name: '角色权限', builtin: true, order: 1 },
-      { key: 'system-menus', path: '/system/menus', name: '菜单管理', builtin: true, order: 2 },
-      { key: 'system-audit', path: '/system/audit', name: '操作日志', builtin: true, order: 3 },
-      { key: 'system-org', path: '/system/org', name: '组织架构', builtin: true, order: 4 },
+      { key: 'system-org', path: '/system/org', name: '组织架构', builtin: true, order: 2 },
+      { key: 'system-menus', path: '/system/menus', name: '菜单管理', builtin: true, order: 3 },
+      { key: 'system-audit', path: '/system/audit', name: '操作日志', builtin: true, order: 4 },
     ],
   },
 ];
@@ -305,7 +323,7 @@ export const DEFAULT_MENU_TREE: MenuTreeNode[] = [
 export const DEFAULT_ORG_TREE: OrgTreeNode[] = [
   {
     key: 'org-gy',
-    title: '国企优学有限公司',
+    title: '渝州智汇科技有限公司',
     type: '组织',
     children: [
       { key: 'dept-gy-rd', title: '研发部', type: '部门' },
@@ -500,15 +518,26 @@ export function getRoles(): SystemRole[] {
   if (!rolesMem) {
     rolesMem = readJson(
       ROLES_KEY,
-      DEFAULT_ROLES.map((r) => ({ ...r, menus: [...r.menus], operations: [...r.operations] })),
-    );
+      DEFAULT_ROLES.map((r) => ({
+        ...r,
+        menus: [...r.menus],
+        operations: [...r.operations],
+        centers: [...r.centers],
+      })),
+    ).map((r) => ({
+      ...r,
+      centers: normalizeCenters(r.centers?.length ? r.centers : ALL_CENTERS),
+    }));
   }
   return rolesMem;
 }
 
 export function saveRoles(list: SystemRole[]) {
-  rolesMem = list;
-  writeJson(ROLES_KEY, list);
+  rolesMem = list.map((r) => ({
+    ...r,
+    centers: normalizeCenters(r.centers),
+  }));
+  writeJson(ROLES_KEY, rolesMem);
 }
 
 export function countUsersByRole(roleId: string) {
@@ -615,15 +644,35 @@ export function upsertOrgNode(input: {
   return { success: true, tree };
 }
 
+/** 删除前校验：有下属部门或本节点人员时不可删 */
+export function checkOrgNodeDeletable(key: string): {
+  canDelete: boolean;
+  reason?: string;
+} {
+  const hit = findOrgNode(getOrgTree(), key);
+  if (!hit) return { canDelete: false, reason: '节点不存在' };
+  const hasChildren = !!hit.node.children?.length;
+  const personCount = getOrgPersons().filter((p) => p.orgKey === key).length;
+  if (hasChildren || personCount > 0) {
+    if (hit.node.type === '组织') {
+      return {
+        canDelete: false,
+        reason: '需先删除下属部门，且节点下不能有人员。',
+      };
+    }
+    return { canDelete: false, reason: '该部门下仍有人员，无法删除。' };
+  }
+  return { canDelete: true };
+}
+
 export function deleteOrgNode(key: string): { success: boolean; errorMessage?: string; tree?: OrgTreeNode[] } {
+  const check = checkOrgNodeDeletable(key);
+  if (!check.canDelete) {
+    return { success: false, errorMessage: check.reason || '无法删除' };
+  }
   const tree = cloneOrgTree(getOrgTree());
   const hit = findOrgNode(tree, key);
   if (!hit) return { success: false, errorMessage: '节点不存在' };
-  if (hit.node.children?.length) {
-    return { success: false, errorMessage: '请先删除下属部门' };
-  }
-  const persons = getOrgPersons().filter((p) => p.orgKey === key);
-  if (persons.length) return { success: false, errorMessage: '该节点下仍有人员，无法删除' };
   const idx = hit.siblings.findIndex((n) => n.key === key);
   if (idx < 0) return { success: false, errorMessage: '节点不存在' };
   hit.siblings.splice(idx, 1);
@@ -651,6 +700,70 @@ export function filterOrgTree(nodes: OrgTreeNode[], keyword: string): OrgTreeNod
       })
       .filter(Boolean) as OrgTreeNode[];
   return walk(nodes);
+}
+
+/** 节点自身 + 全部下属 key（选中组织时汇总人员用） */
+export function collectOrgSubtreeKeys(rootKey: string): string[] {
+  const hit = findOrgNode(getOrgTree(), rootKey);
+  if (!hit) return [];
+  const keys: string[] = [];
+  const walk = (n: OrgTreeNode) => {
+    keys.push(n.key);
+    n.children?.forEach(walk);
+  };
+  walk(hit.node);
+  return keys;
+}
+
+export function upsertOrgPerson(input: {
+  id?: string;
+  orgKey: string;
+  name: string;
+  phone: string;
+  role: string;
+  status: '在职' | '离职';
+}): { success: boolean; errorMessage?: string } {
+  const name = input.name.trim();
+  const phone = input.phone.trim();
+  const role = input.role.trim();
+  const orgKey = String(input.orgKey || '').trim();
+  if (!name) return { success: false, errorMessage: '请输入姓名' };
+  if (!orgKey) return { success: false, errorMessage: '请选择所属组织/部门' };
+  if (!findOrgNode(getOrgTree(), orgKey)) {
+    return { success: false, errorMessage: '所属组织/部门不存在' };
+  }
+  const list = getOrgPersons().map((p) => ({ ...p }));
+  if (input.id) {
+    const idx = list.findIndex((p) => p.id === input.id);
+    if (idx < 0) return { success: false, errorMessage: '人员不存在' };
+    list[idx] = {
+      ...list[idx],
+      orgKey,
+      name,
+      phone: phone || list[idx].phone,
+      role: role || list[idx].role,
+      status: input.status === '离职' ? '离职' : '在职',
+    };
+    saveOrgPersons(list);
+    return { success: true };
+  }
+  const row: OrgPerson = {
+    id: `p-${Date.now()}`,
+    orgKey,
+    name,
+    phone: phone || '--',
+    role: role || '--',
+    status: input.status === '离职' ? '离职' : '在职',
+  };
+  saveOrgPersons([row, ...list]);
+  return { success: true };
+}
+
+export function deleteOrgPerson(id: string): { success: boolean; errorMessage?: string } {
+  const list = getOrgPersons();
+  if (!list.some((p) => p.id === id)) return { success: false, errorMessage: '人员不存在' };
+  saveOrgPersons(list.filter((p) => p.id !== id));
+  return { success: true };
 }
 
 export function getAuditLogs(): AuditLog[] {
@@ -687,6 +800,21 @@ export function findUserByUsername(username: string) {
 
 export function getRoleById(roleId: RoleId) {
   return getRoles().find((r) => r.id === roleId) || DEFAULT_ROLES[0];
+}
+
+/** 当前用户角色可用的分中心（数据权限） */
+export function getCentersForUsername(username?: string): MarketingCenter[] {
+  if (!username) return [];
+  const user = findUserByUsername(username);
+  if (!user) return [...ALL_CENTERS];
+  const role = getRoleById(user.roleId);
+  return normalizeCenters(role.centers?.length ? role.centers : ALL_CENTERS);
+}
+
+export function isAdminUsername(username?: string) {
+  if (!username) return false;
+  const user = findUserByUsername(username);
+  return user?.roleId === 'admin';
 }
 
 /** 创建人可选的审批人列表（已按自审开关过滤） */

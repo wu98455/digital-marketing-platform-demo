@@ -5,12 +5,15 @@ import {
   ProTable,
   StatisticCard,
 } from '@ant-design/pro-components';
-import { request } from '@umijs/max';
-import { Alert, Button, message } from 'antd';
+import { history, request } from '@umijs/max';
+import { Button } from 'antd';
 import React, { useEffect, useRef, useState } from 'react';
+import CenterTags from '@/components/CenterTags';
+import TitleWithTip from '@/components/TitleWithTip';
 import {
   TagChips,
   TagLibraryDrawer,
+  TagPickerModal,
   parseFlatTags,
   remapTagInOverrides,
   removeTagFromOverrides,
@@ -18,6 +21,7 @@ import {
   useTagCatalog,
   type TagItem,
 } from '@/components/Tagging';
+import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
 import { goDataTagCreate } from '../utils/dataTagCreate';
 
@@ -32,6 +36,7 @@ type ProductItem = {
   price: string;
   syncedAt: string;
   tagValues: string;
+  centers?: string[];
 };
 
 const PRODUCT_SEED_COUNT = 20;
@@ -55,6 +60,9 @@ const ProductTaggingPage: React.FC = () => {
   const [selectedRows, setSelectedRows] = useState<ProductItem[]>([]);
   const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerRow, setPickerRow] = useState<ProductItem | null>(null);
+  const [pickerValue, setPickerValue] = useState<TagItem[]>([]);
 
   useEffect(() => {
     request('/api/customer-asset/products/summary').then((res) => {
@@ -86,8 +94,11 @@ const ProductTaggingPage: React.FC = () => {
     return n;
   };
 
-  const goTagRow = (row: ProductItem) =>
-    goDataTagCreate('product', [{ id: row.id, name: row.name }]);
+  const openTagPicker = (row: ProductItem) => {
+    setPickerRow(row);
+    setPickerValue(getTags(row));
+    setPickerOpen(true);
+  };
 
   const columns: ProColumns<ProductItem>[] = [
     {
@@ -114,6 +125,13 @@ const ProductTaggingPage: React.FC = () => {
         上架: { text: '上架' },
         下架: { text: '下架' },
       },
+    },
+    {
+      title: '分中心',
+      dataIndex: 'centerSearch',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
     },
     {
       title: '商品标签',
@@ -144,7 +162,18 @@ const ProductTaggingPage: React.FC = () => {
     { title: '类目', dataIndex: 'category', search: false },
     { title: '价格', dataIndex: 'price', search: false },
     {
-      title: '已打标签',
+      title: '分中心',
+      dataIndex: 'centers',
+      search: false,
+      width: 180,
+      render: (_, row) => {
+        const n = Number(String(row.id).replace(/\D/g, '') || 0);
+        const fallback = [MARKETING_CENTERS[Math.max(n - 1, 0) % MARKETING_CENTERS.length]];
+        return <CenterTags centers={row.centers?.length ? row.centers : fallback} />;
+      },
+    },
+    {
+      title: '标签',
       dataIndex: 'tagValues',
       search: false,
       width: 240,
@@ -152,7 +181,8 @@ const ProductTaggingPage: React.FC = () => {
         <TagChips
           tags={getTags(row)}
           catalog={catalog}
-          onClick={() => goTagRow(row)}
+          emptyText="点击打标"
+          onClick={() => openTagPicker(row)}
         />
       ),
     },
@@ -163,11 +193,14 @@ const ProductTaggingPage: React.FC = () => {
       search: false,
       width: 120,
       render: (_, row) => [
-        <a key="tag" onClick={() => goTagRow(row)}>
+        <a
+          key="tag"
+          onClick={() => goDataTagCreate('product', [{ id: row.id, name: row.name }])}
+        >
           打标
         </a>,
-        <a key="view" onClick={() => message.info('查看商品（演示）')}>
-          查看
+        <a key="view" onClick={() => history.push(`/tag-center/product/view/${row.id}`)}>
+          详情
         </a>,
       ],
     },
@@ -175,13 +208,6 @@ const ProductTaggingPage: React.FC = () => {
 
   return (
     <PageContainer title={false}>
-      <Alert
-        type="info"
-        showIcon
-        closable
-        style={{ marginBottom: 16 }}
-        message="商品标签像贴纸：点色块贴上；可用于人群工坊圈选「买过某类商品」的人。"
-      />
       <ProCard ghost gutter={16} style={{ marginBottom: 16 }}>
         <StatisticCard statistic={{ title: '上架商品数', value: summary.productCount }} />
         <StatisticCard statistic={{ title: '上架 SKU 数', value: summary.skuCount }} />
@@ -189,7 +215,12 @@ const ProductTaggingPage: React.FC = () => {
         <StatisticCard statistic={{ title: 'SKU 总数', value: summary.skuTotal }} />
       </ProCard>
       <ProTable<ProductItem>
-        headerTitle="商品 · 打标"
+        headerTitle={
+          <TitleWithTip
+            title="商品数据 · 打标"
+            tip="商品标签像贴纸：点色块贴上；可用于人群工坊圈选「买过某类商品」的人。"
+          />
+        }
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -227,7 +258,16 @@ const ProductTaggingPage: React.FC = () => {
               return tagFilter.every((t) => tags.includes(t));
             });
           }
-          return { ...res, data, total: tagFilter.length ? data.length : res.total };
+          if (params.centerSearch) {
+            data = data.filter((x) => {
+              const n = Number(String(x.id).replace(/\D/g, '') || 0);
+              const centers = x.centers?.length
+                ? x.centers
+                : [MARKETING_CENTERS[Math.max(n - 1, 0) % MARKETING_CENTERS.length]];
+              return centers.includes(String(params.centerSearch));
+            });
+          }
+          return { ...res, data, total: data.length };
         }}
       />
       <TagLibraryDrawer
@@ -256,6 +296,18 @@ const ProductTaggingPage: React.FC = () => {
             return removeTagFromOverrides(base, item);
           });
           actionRef.current?.reload();
+        }}
+      />
+      <TagPickerModal
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title={`打标签 · ${pickerRow?.name || ''}`}
+        catalog={catalog}
+        mode="replace"
+        value={pickerValue}
+        onSave={(next) => {
+          if (!pickerRow) return;
+          setTagOverrides((prev) => ({ ...prev, [pickerRow.id]: next }));
         }}
       />
     </PageContainer>

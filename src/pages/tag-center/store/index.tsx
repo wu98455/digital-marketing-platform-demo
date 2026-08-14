@@ -1,17 +1,21 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
-import { request } from '@umijs/max';
-import { Alert, Button, message } from 'antd';
+import { history, request } from '@umijs/max';
+import { Button } from 'antd';
 import React, { useRef, useState } from 'react';
+import CenterTags from '@/components/CenterTags';
+import TitleWithTip from '@/components/TitleWithTip';
 import {
   TagChips,
   TagLibraryDrawer,
+  TagPickerModal,
   remapTagInOverrides,
   removeTagFromOverrides,
   tagKey,
   useTagCatalog,
   type TagItem,
 } from '@/components/Tagging';
+import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
 import { goDataTagCreate } from '../utils/dataTagCreate';
 
@@ -25,6 +29,7 @@ type StoreItem = {
   area?: string;
   attr?: string;
   tags?: TagItem[];
+  centers?: string[];
 };
 
 /** 演示用量统计用的种子行（与 mock stores s1–s5 对齐） */
@@ -60,6 +65,9 @@ const StoreTaggingPage: React.FC = () => {
   const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
   const [selectedRows, setSelectedRows] = useState<StoreItem[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerRow, setPickerRow] = useState<StoreItem | null>(null);
+  const [pickerValue, setPickerValue] = useState<TagItem[]>([]);
 
   const getTags = (row: StoreItem) => tagOverrides[row.id] || row.tags || seedTags(row);
 
@@ -73,8 +81,11 @@ const StoreTaggingPage: React.FC = () => {
     return n;
   };
 
-  const goTagRow = (row: StoreItem) =>
-    goDataTagCreate('store', [{ id: row.id, name: row.name }]);
+  const openTagPicker = (row: StoreItem) => {
+    setPickerRow(row);
+    setPickerValue(getTags(row));
+    setPickerOpen(true);
+  };
 
   const columns: ProColumns<StoreItem>[] = [
     {
@@ -105,6 +116,13 @@ const StoreTaggingPage: React.FC = () => {
     },
     { title: '店铺名称', dataIndex: 'nameSearch', hideInTable: true },
     { title: '区域', dataIndex: 'areaSearch', hideInTable: true },
+    {
+      title: '分中心',
+      dataIndex: 'centerSearch',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
+    },
     { title: '店铺名称', dataIndex: 'name', search: false },
     { title: '店铺ID', dataIndex: 'storeId', search: false, width: 100 },
     { title: '平台', dataIndex: 'platform', search: false },
@@ -123,12 +141,28 @@ const StoreTaggingPage: React.FC = () => {
       render: (_, row) => [row.area, row.attr].filter(Boolean).join(' · ') || '--',
     },
     {
-      title: '已打标签',
+      title: '分中心',
+      dataIndex: 'centers',
+      search: false,
+      width: 180,
+      render: (_, row) => {
+        const idx = SEED_STORE_ROWS.findIndex((s) => s.id === row.id);
+        const fallback = [MARKETING_CENTERS[(idx >= 0 ? idx : 0) % MARKETING_CENTERS.length]];
+        return <CenterTags centers={row.centers?.length ? row.centers : fallback} />;
+      },
+    },
+    {
+      title: '标签',
       dataIndex: 'tags',
       search: false,
       width: 240,
       render: (_, row) => (
-        <TagChips tags={getTags(row)} catalog={catalog} onClick={() => goTagRow(row)} />
+        <TagChips
+          tags={getTags(row)}
+          catalog={catalog}
+          emptyText="点击打标"
+          onClick={() => openTagPicker(row)}
+        />
       ),
     },
     {
@@ -137,11 +171,14 @@ const StoreTaggingPage: React.FC = () => {
       search: false,
       width: 120,
       render: (_, row) => [
-        <a key="tag" onClick={() => goTagRow(row)}>
+        <a
+          key="tag"
+          onClick={() => goDataTagCreate('store', [{ id: row.id, name: row.name }])}
+        >
           打标
         </a>,
-        <a key="view" onClick={() => message.info(`查看店铺「${row.name}」（演示）`)}>
-          查看
+        <a key="view" onClick={() => history.push(`/tag-center/store/view/${row.id}`)}>
+          详情
         </a>,
       ],
     },
@@ -149,15 +186,13 @@ const StoreTaggingPage: React.FC = () => {
 
   return (
     <PageContainer title={false}>
-      <Alert
-        type="info"
-        showIcon
-        closable
-        style={{ marginBottom: 16 }}
-        message="店铺标签用于圈人条件（如「曾在自营重点店下单」），结果永远是人包。"
-      />
       <ProTable<StoreItem>
-        headerTitle="店铺 · 打标"
+        headerTitle={
+          <TitleWithTip
+            title="店铺数据 · 打标"
+            tip="店铺标签用于圈人条件（如「曾在自营重点店下单」），结果永远是人包。"
+          />
+        }
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -203,6 +238,14 @@ const StoreTaggingPage: React.FC = () => {
           if (params.areaSearch) {
             data = data.filter((x) => (x.area || '').includes(String(params.areaSearch)));
           }
+          if (params.centerSearch) {
+            data = data.filter((x) =>
+              (x.centers?.length
+                ? x.centers
+                : [MARKETING_CENTERS[Number(String(x.id).replace(/\D/g, '') || 0) % MARKETING_CENTERS.length]]
+              ).includes(String(params.centerSearch)),
+            );
+          }
           return { ...res, data, total: data.length };
         }}
       />
@@ -230,6 +273,18 @@ const StoreTaggingPage: React.FC = () => {
             return removeTagFromOverrides(base, item);
           });
           actionRef.current?.reload();
+        }}
+      />
+      <TagPickerModal
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title={`打标签 · ${pickerRow?.name || ''}`}
+        catalog={catalog}
+        mode="replace"
+        value={pickerValue}
+        onSave={(next) => {
+          if (!pickerRow) return;
+          setTagOverrides((prev) => ({ ...prev, [pickerRow.id]: next }));
         }}
       />
     </PageContainer>

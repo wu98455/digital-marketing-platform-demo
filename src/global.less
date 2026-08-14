@@ -277,3 +277,108 @@ ol {
     }
   }
 }
+
+/* 系统管理 · 角色弹窗：最高高度留上下外边距（各约 48px），内容区内滚动 */
+.role-edit-modal.ant-modal {
+  max-height: calc(100vh - 96px);
+  padding-bottom: 0;
+  top: 48px;
+}
+
+.role-edit-modal {
+  .ant-modal-content {
+    max-height: calc(100vh - 96px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .ant-modal-header {
+    flex-shrink: 0;
+    margin: 0;
+    padding: 16px 20px 8px;
+  }
+
+  .ant-modal-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 8px 20px 4px;
+
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+
+    &:hover {
+      scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+    }
+
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: transparent;
+      border-radius: 6px;
+    }
+
+    &:hover::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.12);
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.22);
+    }
+  }
+
+  .ant-modal-footer {
+    flex-shrink: 0;
+    margin: 0;
+    padding: 8px 20px 16px;
+  }
+
+  .ant-form-item {
+    margin-bottom: 16px;
+  }
+}
+
+.role-perm-tree-scroll {
+  max-height: min(280px, calc(100vh - 420px));
+  overflow: auto;
+  padding: 4px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 6px;
+  background: #fff;
+
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+
+  &:hover {
+    scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+  }
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 6px;
+  }
+
+  &:hover::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.12);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.22);
+  }
+}

@@ -3,8 +3,9 @@ import { PageContainer, ProTable } from '@ant-design/pro-components';
 import { history, request, useLocation } from '@umijs/max';
 import { Alert, Button, Checkbox, Modal, Tag, message } from 'antd';
 import React, { useEffect, useRef, useState } from 'react';
+import CenterTags from '@/components/CenterTags';
+import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
-import CrowdCreateModal from '../components/CrowdCreateModal';
 
 type CrowdItem = {
   id: string;
@@ -19,21 +20,18 @@ type CrowdItem = {
   catalog: string;
   canDelete?: boolean;
   canCopy?: boolean;
+  centers?: string[];
 };
 
 const CrowdList: React.FC = () => {
   const actionRef = useRef<ActionType | null>(null);
   const [onlyMine, setOnlyMine] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [copyName, setCopyName] = useState<string>();
   const location = useLocation();
 
   useEffect(() => {
     const q = new URLSearchParams(location.search || '');
     if (q.get('create') === '1') {
-      setCopyName(undefined);
-      setCreateOpen(true);
-      history.replace('/crowd');
+      history.replace('/crowd/create');
     }
   }, [location.search]);
 
@@ -60,6 +58,19 @@ const CrowdList: React.FC = () => {
         条件人群: { text: '条件人群' },
         临时人群: { text: '临时人群' },
       },
+    },
+    {
+      title: '分中心',
+      dataIndex: 'centerSearch',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAtRange',
+      hideInTable: true,
+      valueType: 'dateRange',
     },
     {
       title: '人群ID',
@@ -96,6 +107,17 @@ const CrowdList: React.FC = () => {
       ellipsis: true,
     },
     {
+      title: '分中心',
+      dataIndex: 'centers',
+      search: false,
+      width: 180,
+      render: (_, row) => {
+        const n = Number(String(row.id).replace(/\D/g, '') || 0);
+        const fallback = [MARKETING_CENTERS[n % MARKETING_CENTERS.length]];
+        return <CenterTags centers={row.centers?.length ? row.centers : fallback} />;
+      },
+    },
+    {
       title: '人群类型',
       dataIndex: 'type',
       search: false,
@@ -107,13 +129,6 @@ const CrowdList: React.FC = () => {
       dataIndex: 'creator',
       search: false,
       width: 120,
-      ellipsis: true,
-    },
-    {
-      title: '创建来源',
-      dataIndex: 'source',
-      search: false,
-      width: 110,
       ellipsis: true,
     },
     {
@@ -138,13 +153,13 @@ const CrowdList: React.FC = () => {
       fixed: 'right',
       render: (_, row) => [
         <Button
-          key="edit"
+          key="detail"
           type="link"
           size="small"
           style={{ padding: 0 }}
           onClick={() => history.push(`/crowd/detail/${row.id}`)}
         >
-          编辑
+          详情
         </Button>,
         <Button
           key="del"
@@ -171,8 +186,9 @@ const CrowdList: React.FC = () => {
           disabled={!row.canCopy}
           style={{ padding: 0 }}
           onClick={() => {
-            setCopyName(`${row.name}（副本）`);
-            setCreateOpen(true);
+            history.push(
+              `/crowd/create?copyName=${encodeURIComponent(`${row.name}（副本）`)}`,
+            );
           }}
         >
           复制
@@ -207,14 +223,7 @@ const CrowdList: React.FC = () => {
         pagination={listPagination}
         scroll={{ x: 1220 }}
         toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            onClick={() => {
-              setCopyName(undefined);
-              setCreateOpen(true);
-            }}
-          >
+          <Button key="create" type="primary" onClick={() => history.push('/crowd/create')}>
             新建目标人群
           </Button>,
           <Checkbox
@@ -229,23 +238,19 @@ const CrowdList: React.FC = () => {
           </Checkbox>,
         ]}
         request={async (params) => {
-          const res = await request('/api/customer-asset/crowds', {
+          const range = params.createdAtRange as string[] | undefined;
+          return request('/api/customer-asset/crowds', {
             params: {
               ...params,
               keyword: params.keyword,
               creator: params.creatorSearch || params.creator,
               type: params.typeSearch || params.type,
+              center: params.centerSearch,
+              createdAtRange: range?.length === 2 ? range.join(',') : undefined,
               onlyMine: onlyMine ? 'true' : undefined,
             },
           });
-          return res;
         }}
-      />
-      <CrowdCreateModal
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        initialName={copyName}
-        onSuccess={() => actionRef.current?.reload()}
       />
     </PageContainer>
   );

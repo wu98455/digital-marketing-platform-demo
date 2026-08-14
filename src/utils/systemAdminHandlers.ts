@@ -2,7 +2,10 @@ import {
   appendAudit,
   countUsersByRole,
   deleteMenuNode,
+  collectOrgSubtreeKeys,
+  checkOrgNodeDeletable,
   deleteOrgNode,
+  deleteOrgPerson as removeOrgPerson,
   filterOrgTree,
   findUserByUsername,
   getApproverOptionsForCreator,
@@ -19,6 +22,7 @@ import {
   saveUsers,
   upsertMenuNode,
   upsertOrgNode,
+  upsertOrgPerson as saveOrgPerson,
   type RoleId,
   type SystemRole,
   type SystemUser,
@@ -116,6 +120,23 @@ export const systemAdminHandlers = {
     return { success: true, data: { id, username: copy[idx].username } };
   },
 
+  deleteUser({ pathParams = {}, data }: Ctx) {
+    const id = String(pathParams.id || '');
+    const body = (data || {}) as { actor?: string };
+    const list = getUsers();
+    const user = list.find((u) => u.id === id);
+    if (!user) return { success: false, errorMessage: '用户不存在' };
+    if (['demo', 'admin'].includes(user.username)) {
+      return { success: false, errorMessage: '系统内置账号不可删除，可改为停用' };
+    }
+    if (body.actor && user.username === body.actor) {
+      return { success: false, errorMessage: '不能删除当前登录账号' };
+    }
+    saveUsers(list.filter((u) => u.id !== id));
+    appendAudit(body.actor || 'system', '删除用户', user.username);
+    return { success: true };
+  },
+
   approverOptions({ pathParams = {} }: Ctx) {
     const username = pathParams.username;
     const user = findUserByUsername(username);
@@ -129,8 +150,18 @@ export const systemAdminHandlers = {
     };
   },
 
-  listRoles() {
-    return { success: true, data: getRoles() };
+  listRoles(ctx: Ctx = {}) {
+    const params = ctx.params || {};
+    let list = [...getRoles()];
+    const { keyword, name, center, current = 1, pageSize = 10 } = params || {};
+    const kw = String(keyword || name || '').trim();
+    if (kw) {
+      list = list.filter((r) => r.name.includes(kw) || (r.description || '').includes(kw));
+    }
+    if (center && center !== '全部') {
+      list = list.filter((r) => (r.centers || []).includes(String(center)));
+    }
+    return pageSlice(list, current, pageSize);
   },
 
   createRole({ data }: Ctx) {
@@ -146,6 +177,7 @@ export const systemAdminHandlers = {
       description: String(body.description || ''),
       menus: Array.isArray(body.menus) ? body.menus.map(String) : [],
       operations: Array.isArray(body.operations) ? (body.operations as any) : [],
+      centers: Array.isArray(body.centers) ? (body.centers as any) : [],
     };
     saveRoles([...getRoles(), role]);
     appendAudit(body.actor || 'system', '新建角色', role.name);
@@ -166,6 +198,7 @@ export const systemAdminHandlers = {
       operations: Array.isArray(body.operations)
         ? (body.operations as any)
         : list[idx].operations,
+      centers: Array.isArray(body.centers) ? (body.centers as any) : list[idx].centers,
     };
     const copy = [...list];
     copy[idx] = next;
@@ -180,6 +213,9 @@ export const systemAdminHandlers = {
     const list = getRoles();
     const role = list.find((r) => r.id === id);
     if (!role) return { success: false, errorMessage: '角色不存在' };
+    if (['admin', 'tagger', 'marketer'].includes(String(id))) {
+      return { success: false, errorMessage: '内置角色不可删除，可复制后调整' };
+    }
     const used = countUsersByRole(id);
     if (used > 0) {
       return { success: false, errorMessage: `仍有 ${used} 个用户绑定该角色，请先调整用户角色` };
@@ -187,6 +223,30 @@ export const systemAdminHandlers = {
     saveRoles(list.filter((r) => r.id !== id));
     appendAudit(body.actor || 'system', '删除角色', role.name);
     return { success: true };
+  },
+
+  copyRole({ pathParams = {}, data }: Ctx) {
+    const id = pathParams.id as RoleId;
+    const body = (data || {}) as { actor?: string; name?: string };
+    const src = getRoles().find((r) => r.id === id);
+    if (!src) return { success: false, errorMessage: '角色不存在' };
+    const name = String(body.name || `${src.name}（副本）`).trim();
+    if (!name) return { success: false, errorMessage: '请填写角色名称' };
+    if (getRoles().some((r) => r.name === name)) {
+      return { success: false, errorMessage: '角色名称已存在' };
+    }
+    const newId = slugifyRoleId(name);
+    const role: SystemRole = {
+      id: newId,
+      name,
+      description: src.description,
+      menus: [...(src.menus || [])],
+      operations: [...(src.operations || [])],
+      centers: [...(src.centers || [])],
+    };
+    saveRoles([...getRoles(), role]);
+    appendAudit(body.actor || 'system', '复制角色', `${src.name} → ${name}`);
+    return { success: true, data: role };
   },
 
   getMenus() {
@@ -273,13 +333,24 @@ export const systemAdminHandlers = {
 
   listAudit({ params = {} }: Ctx) {
     let list = [...getAuditLogs()];
-    const { keyword, actor, current = 1, pageSize = 10 } = params;
+    const { keyword, actor, action, atRange, current = 1, pageSize = 10 } = params;
     if (keyword) {
       list = list.filter(
         (l) => l.action.includes(String(keyword)) || (l.detail || '').includes(String(keyword)),
       );
     }
     if (actor) list = list.filter((l) => l.actor.includes(String(actor)));
+    if (action) list = list.filter((l) => l.action.includes(String(action)));
+    if (atRange) {
+      const range = String(atRange).split(',');
+      if (range.length === 2) {
+        const [from, to] = range;
+        list = list.filter((l) => {
+          const d = (l.at || '').slice(0, 10);
+          return d >= from && d <= to;
+        });
+      }
+    }
     return pageSlice(list, current, pageSize);
   },
 
@@ -308,6 +379,12 @@ export const systemAdminHandlers = {
     return { success: true, data: { tree: res.tree } };
   },
 
+  checkDeleteOrg({ pathParams = {} }: Ctx) {
+    const key = String(pathParams.key || '');
+    const res = checkOrgNodeDeletable(key);
+    return { success: true, data: res };
+  },
+
   deleteOrg({ pathParams = {}, data }: Ctx) {
     const key = pathParams.key;
     const body = (data || {}) as { actor?: string };
@@ -320,13 +397,54 @@ export const systemAdminHandlers = {
   listOrgPersons({ params = {} }: Ctx) {
     const orgKey = String(params.orgKey || '');
     let list = getOrgPersons();
-    if (orgKey) list = list.filter((p) => p.orgKey === orgKey);
-    const { keyword, current = 1, pageSize = 10 } = params;
-    if (keyword) {
-      list = list.filter(
-        (p) => p.name.includes(String(keyword)) || p.phone.includes(String(keyword)),
-      );
+    if (orgKey) {
+      const keys = new Set(collectOrgSubtreeKeys(orgKey));
+      list = list.filter((p) => keys.has(p.orgKey));
+    }
+    const { keyword, name, phone, status, current = 1, pageSize = 10 } = params;
+    const kw = String(keyword || name || '').trim();
+    if (kw) {
+      list = list.filter((p) => p.name.includes(kw) || p.phone.includes(kw));
+    }
+    if (phone) {
+      list = list.filter((p) => p.phone.includes(String(phone)));
+    }
+    if (status && status !== '全部') {
+      list = list.filter((p) => p.status === status);
     }
     return pageSlice(list, current, pageSize);
+  },
+
+  upsertOrgPerson({ data, pathParams = {} }: Ctx) {
+    const body = (data || {}) as {
+      id?: string;
+      orgKey?: string;
+      name?: string;
+      phone?: string;
+      role?: string;
+      status?: '在职' | '离职';
+      actor?: string;
+    };
+    const id = body.id || pathParams.id;
+    const res = saveOrgPerson({
+      id,
+      orgKey: String(body.orgKey || ''),
+      name: String(body.name || ''),
+      phone: String(body.phone || ''),
+      role: String(body.role || ''),
+      status: body.status === '离职' ? '离职' : '在职',
+    });
+    if (!res.success) return res;
+    appendAudit(body.actor || 'system', id ? '编辑组织人员' : '新增组织人员', body.name);
+    return { success: true };
+  },
+
+  deleteOrgPerson({ pathParams = {}, data }: Ctx) {
+    const id = String(pathParams.id || '');
+    const body = (data || {}) as { actor?: string };
+    const res = removeOrgPerson(id);
+    if (!res.success) return res;
+    appendAudit(body.actor || 'system', '删除组织人员', id);
+    return { success: true };
   },
 };

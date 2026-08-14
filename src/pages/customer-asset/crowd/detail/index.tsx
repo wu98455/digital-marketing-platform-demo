@@ -1,8 +1,20 @@
 import { PageContainer, ProCard, ProDescriptions, ProTable } from '@ant-design/pro-components';
 import { history, request, useParams } from '@umijs/max';
-import { Button, Col, Row, Statistic, Tabs, message } from 'antd';
+import { Button, Col, Modal, Row, Space, Statistic, Tabs, message } from 'antd';
 import React, { useEffect, useState } from 'react';
+import CenterTags from '@/components/CenterTags';
 import { listPagination } from '@/utils/listSearch';
+import { pageHeader } from '@/utils/pageHeader';
+
+type CrowdMember = {
+  id: string;
+  oneId: string;
+  memberId: string;
+  name: string;
+  phoneMasked: string;
+  centers?: string[];
+  source?: string;
+};
 
 const CrowdDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,20 +38,43 @@ const CrowdDetail: React.FC = () => {
   return (
     <PageContainer
       loading={loading}
-      title={false}
-      onBack={() => history.push('/crowd')}
-      extra={[
-        <Button key="edit" onClick={() => message.info('编辑（演示）')}>
-          编辑
-        </Button>,
-        <Button
-          key="est"
-          type="primary"
-          onClick={() => message.success(`估算人数：${data?.count ?? '-'}`)}
-        >
-          估算人数
-        </Button>,
-      ]}
+      {...pageHeader({
+        title: '人群详情',
+        backTo: '/crowd',
+        crumbs: [
+          { title: '目标人群', path: '/crowd' },
+          { title: '人群详情' },
+        ],
+        extra: (
+          <Space>
+            <Button
+              disabled={data?.canCopy === false}
+              onClick={() => {
+                history.push(
+                  `/crowd/create?copyName=${encodeURIComponent(`${data?.name || '人群'}（副本）`)}`,
+                );
+              }}
+            >
+              复制
+            </Button>
+            <Button
+              danger
+              disabled={data?.canDelete === false}
+              onClick={() => {
+                Modal.confirm({
+                  title: '确认删除该人群？',
+                  onOk: () => {
+                    message.success('已删除（演示）');
+                    history.push('/crowd');
+                  },
+                });
+              }}
+            >
+              删除
+            </Button>
+          </Space>
+        ),
+      })}
     >
       <ProCard style={{ marginBottom: 16 }}>
         <ProDescriptions column={3}>
@@ -56,29 +91,38 @@ const CrowdDetail: React.FC = () => {
 
       <ProCard>
         <Tabs
+          defaultActiveKey="members"
           items={[
-            {
-              key: 'cond',
-              label: '人群条件',
-              children: <div style={{ padding: 8 }}>{data?.conditions || '--'}</div>,
-            },
             {
               key: 'members',
               label: '人群明细',
               children: (
-                <ProTable
+                <ProTable<CrowdMember>
                   search={false}
                   options={false}
-                  pagination={listPagination}
-                  rowKey="customerId"
+                  pagination={listPagination as any}
+                  rowKey="id"
                   dataSource={data?.members || []}
                   columns={[
-                    { title: '全渠道客户ID', dataIndex: 'customerId' },
-                    { title: '姓名', dataIndex: 'name' },
-                    { title: '手机号', dataIndex: 'phone' },
+                    { title: '人员 OneID', dataIndex: 'oneId', width: 160 },
+                    { title: '会员ID', dataIndex: 'memberId', width: 100 },
+                    { title: '姓名', dataIndex: 'name', width: 80 },
+                    { title: '手机', dataIndex: 'phoneMasked', width: 120 },
+                    {
+                      title: '分中心',
+                      dataIndex: 'centers',
+                      width: 160,
+                      render: (_, row) => <CenterTags centers={row.centers || []} />,
+                    },
+                    { title: '来源', dataIndex: 'source', ellipsis: true },
                   ]}
                 />
               ),
+            },
+            {
+              key: 'cond',
+              label: '人群条件',
+              children: <div style={{ padding: 8 }}>{data?.conditions || '--'}</div>,
             },
             {
               key: 'portrait',

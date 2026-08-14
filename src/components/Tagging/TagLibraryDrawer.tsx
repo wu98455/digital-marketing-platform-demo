@@ -32,9 +32,9 @@ type Props = {
 };
 
 const KIND_LABEL: Record<CatalogKind, string> = {
-  customer: '客户',
-  store: '店铺',
-  product: '商品',
+  customer: '人员数据',
+  store: '店铺数据',
+  product: '商品数据',
   campaign: '专题活动',
 };
 

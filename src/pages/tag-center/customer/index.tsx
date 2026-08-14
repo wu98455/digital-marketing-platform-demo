@@ -1,11 +1,14 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import { history, request, useLocation } from '@umijs/max';
-import { Alert, Button, Space } from 'antd';
+import { Button, Space } from 'antd';
 import React, { useMemo, useRef, useState } from 'react';
+import CenterTags from '@/components/CenterTags';
+import TitleWithTip from '@/components/TitleWithTip';
 import {
   TagChips,
   TagLibraryDrawer,
+  TagPickerModal,
   flattenGroups,
   remapTagInOverrides,
   removeTagFromOverrides,
@@ -13,6 +16,7 @@ import {
   useTagCatalog,
   type TagItem,
 } from '@/components/Tagging';
+import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
 import RegionSelectModal from '@/pages/customer-asset/customer-list/components/RegionSelectModal';
 import StoreSelectModal from '@/pages/customer-asset/customer-list/components/StoreSelectModal';
@@ -22,6 +26,7 @@ export type CustomerItem = {
   id: string;
   customerId: string;
   customerIdMasked: string;
+  oneId?: string;
   name?: string;
   age?: number;
   phoneMasked: string;
@@ -36,6 +41,12 @@ export type CustomerItem = {
   storeName?: string;
   tags?: { group: string; tags: string[] }[];
   tagInstances?: { group: string; tag: string; source?: string }[];
+  centers?: string[];
+};
+
+const seedCenters = (id: string): string[] => {
+  const n = Number(String(id).replace(/\D/g, '') || 0);
+  return [MARKETING_CENTERS[n % MARKETING_CENTERS.length]];
 };
 
 const seedTags = (id: string): TagItem[] => {
@@ -57,18 +68,15 @@ const seedTags = (id: string): TagItem[] => {
 };
 
 type Props = {
-  showTaggingTip?: boolean;
   headerTitle?: string;
 };
 
-const CustomerTaggingList: React.FC<Props> = ({
-  showTaggingTip = true,
-  headerTitle,
-}) => {
+const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
   const location = useLocation();
   const resolvedTitle =
     headerTitle ||
-    (location.pathname.startsWith('/tag-center/customer') ? '客户' : '会员标签');
+    (location.pathname.startsWith('/tag-center/customer') ? '人员数据' : '会员标签');
+  const titleTip = '本页支持查看人员标签与打标。';
   const { getCatalog } = useTagCatalog();
   const catalog = getCatalog('customer');
   const actionRef = useRef<ActionType | null>(null);
@@ -79,6 +87,9 @@ const CustomerTaggingList: React.FC<Props> = ({
   const [tagOverrides, setTagOverrides] = useState<Record<string, TagItem[]>>({});
   const [selectedRows, setSelectedRows] = useState<CustomerItem[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerRow, setPickerRow] = useState<CustomerItem | null>(null);
+  const [pickerValue, setPickerValue] = useState<TagItem[]>([]);
 
   const viewBase = location.pathname.startsWith('/tag-center')
     ? '/tag-center/customer'
@@ -111,10 +122,11 @@ const CustomerTaggingList: React.FC<Props> = ({
     return n;
   };
 
-  const goTagRow = (row: CustomerItem) =>
-    goDataTagCreate('customer', [
-      { id: row.id, name: row.name || row.customerIdMasked },
-    ]);
+  const openTagPicker = (row: CustomerItem) => {
+    setPickerRow(row);
+    setPickerValue(getTags(row));
+    setPickerOpen(true);
+  };
 
   const tagFilterOptions = useMemo(
     () =>
@@ -135,18 +147,25 @@ const CustomerTaggingList: React.FC<Props> = ({
         </Button>
       ),
     },
-    {
-      title: '全渠道客户ID',
-      dataIndex: 'customerId',
-      hideInTable: true,
-      fieldProps: { placeholder: '请输入全渠道客户ID' },
-    },
     { title: '手机号', dataIndex: 'phone', hideInTable: true },
+    {
+      title: '人员 OneID',
+      dataIndex: 'oneIdSearch',
+      hideInTable: true,
+      fieldProps: { placeholder: '如 OID202608120001' },
+    },
     {
       title: '姓名',
       dataIndex: 'nameSearch',
       hideInTable: true,
       fieldProps: { placeholder: '请输入姓名' },
+    },
+    {
+      title: '分中心',
+      dataIndex: 'centerSearch',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
     },
     {
       title: '性别',
@@ -182,7 +201,7 @@ const CustomerTaggingList: React.FC<Props> = ({
       ),
     },
     {
-      title: '客户标签',
+      title: '人员标签',
       dataIndex: 'tagFilter',
       hideInTable: true,
       valueType: 'select',
@@ -193,14 +212,23 @@ const CustomerTaggingList: React.FC<Props> = ({
       },
     },
     {
-      title: '全渠道客户ID',
-      dataIndex: 'customerIdMasked',
+      title: '人员 OneID',
+      dataIndex: 'oneId',
       search: false,
-      render: (_, row) => (
-        <Button type="link" style={{ padding: 0 }} onClick={() => history.push(`${viewBase}/view/${row.id}`)}>
-          {row.customerIdMasked}
-        </Button>
-      ),
+      width: 150,
+      render: (_, row) => {
+        const oneId =
+          row.oneId || `OID20260812${String(row.id).replace(/\D/g, '').padStart(4, '0')}`;
+        return (
+          <Button
+            type="link"
+            style={{ padding: 0 }}
+            onClick={() => history.push(`${viewBase}/view/${row.id}`)}
+          >
+            {oneId}
+          </Button>
+        );
+      },
     },
     {
       title: '姓名',
@@ -240,13 +268,25 @@ const CustomerTaggingList: React.FC<Props> = ({
       render: (_, row) => row.storeName || selectedStores[0]?.name || '惠游重庆',
     },
     {
-      title: '已打标签',
+      title: '分中心',
+      dataIndex: 'centers',
+      search: false,
+      width: 180,
+      render: (_, row) => <CenterTags centers={row.centers?.length ? row.centers : seedCenters(row.id)} />,
+    },
+    {
+      title: '标签',
       dataIndex: 'tags',
       search: false,
       width: 280,
       render: (_, row) => (
         <Space direction="vertical" size={0}>
-          <TagChips tags={getTags(row)} catalog={catalog} onClick={() => goTagRow(row)} />
+          <TagChips
+            tags={getTags(row)}
+            catalog={catalog}
+            emptyText="点击打标"
+            onClick={() => openTagPicker(row)}
+          />
           {getTagSourceHint(row) ? (
             <span style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>
               来源：{getTagSourceHint(row)}
@@ -261,11 +301,18 @@ const CustomerTaggingList: React.FC<Props> = ({
       search: false,
       width: 120,
       render: (_, row) => [
-        <a key="tag" onClick={() => goTagRow(row)}>
+        <a
+          key="tag"
+          onClick={() =>
+            goDataTagCreate('customer', [
+              { id: row.id, name: row.name || row.customerIdMasked },
+            ])
+          }
+        >
           打标
         </a>,
         <a key="view" onClick={() => history.push(`${viewBase}/view/${row.id}`)}>
-          查看
+          详情
         </a>,
       ],
     },
@@ -273,17 +320,8 @@ const CustomerTaggingList: React.FC<Props> = ({
 
   return (
     <PageContainer title={false}>
-      {showTaggingTip ? (
-        <Alert
-          type="info"
-          showIcon
-          closable
-          style={{ marginBottom: 16 }}
-          message="本页支持查看客户标签与打标。"
-        />
-      ) : null}
       <ProTable<CustomerItem>
-        headerTitle={resolvedTitle}
+        headerTitle={<TitleWithTip title={resolvedTitle} tip={titleTip} />}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -330,7 +368,8 @@ const CustomerTaggingList: React.FC<Props> = ({
               ...params,
               name: params.nameSearch || params.name,
               phone: params.phone,
-              customerId: params.customerId,
+              oneId: params.oneIdSearch,
+              center: params.centerSearch,
               storeIds: selectedStores.map((s) => s.id).join(','),
               regionCodes: selectedRegions.map((r) => r.code).join(','),
             },
@@ -392,6 +431,18 @@ const CustomerTaggingList: React.FC<Props> = ({
             return removeTagFromOverrides(base, item);
           });
           actionRef.current?.reload();
+        }}
+      />
+      <TagPickerModal
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title={`打标签 · ${pickerRow?.name || pickerRow?.customerIdMasked || ''}`}
+        catalog={catalog}
+        mode="replace"
+        value={pickerValue}
+        onSave={(next) => {
+          if (!pickerRow) return;
+          setTagOverrides((prev) => ({ ...prev, [pickerRow.id]: next }));
         }}
       />
     </PageContainer>

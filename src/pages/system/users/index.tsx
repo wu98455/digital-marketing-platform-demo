@@ -8,7 +8,7 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { request, useModel } from '@umijs/max';
-import { Button, Space, Tag, message } from 'antd';
+import { Button, Modal, Space, Tag, message } from 'antd';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
 import type { SystemUser } from '@/utils/systemAdminStore';
@@ -25,7 +25,9 @@ const SystemUsersPage: React.FC = () => {
   const loadOptions = async () => {
     const [usersRes, rolesRes] = await Promise.all([
       request<{ data: SystemUser[] }>('/api/system/users', { params: { current: 1, pageSize: 200 } }),
-      request<{ data: { id: string; name: string }[] }>('/api/system/roles'),
+      request<{ data: { id: string; name: string }[] }>('/api/system/roles', {
+        params: { current: 1, pageSize: 200 },
+      }),
     ]);
     setUserOptions(
       (usersRes.data || [])
@@ -39,9 +41,35 @@ const SystemUsersPage: React.FC = () => {
     loadOptions();
   }, []);
 
+  const toggleStatus = (row: SystemUser) => {
+    const nextStatus = row.status === '启用' ? '停用' : '启用';
+    Modal.confirm({
+      title: `${nextStatus}账号「${row.username}」？`,
+      content: nextStatus === '停用' ? '停用后该账号将无法登录。' : '启用后可正常登录系统。',
+      onOk: async () => {
+        const res = await request<{ success: boolean; errorMessage?: string }>(
+          `/api/system/users/${row.id}`,
+          { method: 'PUT', data: { ...row, status: nextStatus, actor } },
+        );
+        if (res?.success === false) {
+          message.error(res.errorMessage || '操作失败');
+          return;
+        }
+        message.success(`已${nextStatus}`);
+        await loadOptions();
+        actionRef.current?.reload();
+      },
+    });
+  };
+
   const columns: ProColumns<SystemUser>[] = useMemo(
     () => [
-      { title: '账号', dataIndex: 'keyword', hideInTable: true },
+      {
+        title: '账号/姓名',
+        dataIndex: 'keyword',
+        hideInTable: true,
+        fieldProps: { placeholder: '账号或姓名' },
+      },
       {
         title: '状态',
         dataIndex: 'status',
@@ -94,7 +122,7 @@ const SystemUsersPage: React.FC = () => {
       {
         title: '操作',
         valueType: 'option',
-        width: 160,
+        width: 220,
         render: (_, row) => [
           <a
             key="edit"
@@ -105,17 +133,51 @@ const SystemUsersPage: React.FC = () => {
           >
             编辑
           </a>,
+          <a key="status" onClick={() => toggleStatus(row)}>
+            {row.status === '启用' ? '停用' : '启用'}
+          </a>,
           <a
             key="reset"
-            onClick={async () => {
-              await request(`/api/system/users/${row.id}/reset-password`, {
-                method: 'POST',
-                data: { password: '123456', actor },
+            onClick={() => {
+              Modal.confirm({
+                title: `重置「${row.username}」密码？`,
+                content: '密码将重置为 123456。',
+                onOk: async () => {
+                  await request(`/api/system/users/${row.id}/reset-password`, {
+                    method: 'POST',
+                    data: { password: '123456', actor },
+                  });
+                  message.success('已重置密码为 123456');
+                },
               });
-              message.success(`已重置「${row.username}」密码为 123456`);
             }}
           >
             重置密码
+          </a>,
+          <a
+            key="del"
+            onClick={() => {
+              Modal.confirm({
+                title: `删除用户「${row.username}」？`,
+                content: '删除后不可恢复；内置账号不可删。',
+                okButtonProps: { danger: true },
+                onOk: async () => {
+                  const res = await request<{ success: boolean; errorMessage?: string }>(
+                    `/api/system/users/${row.id}`,
+                    { method: 'DELETE', data: { actor } },
+                  );
+                  if (res?.success === false) {
+                    message.error(res.errorMessage || '删除失败');
+                    return;
+                  }
+                  message.success('已删除');
+                  await loadOptions();
+                  actionRef.current?.reload();
+                },
+              });
+            }}
+          >
+            删除
           </a>,
         ],
       },

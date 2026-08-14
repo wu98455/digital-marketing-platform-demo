@@ -518,10 +518,15 @@ export default {
       data: {
         ...item,
         conditions: '标签「高价值」 且 行为「近90天有互动」',
-        members: customers.slice(0, 5).map((c) => ({
-          customerId: c.customerIdMasked,
-          name: c.name || '--',
-          phone: c.phoneMasked,
+        members: customers.slice(0, 12).map((c, i) => ({
+          id: c.id,
+          oneId: `OID20260812${String(i + 1).padStart(4, '0')}`,
+          memberId: c.memberId,
+          name: c.name || ['张三', '李四', '王五', '赵六', '钱七'][i % 5],
+          phoneMasked: c.phoneMasked,
+          centers: [['长寿工惠', '山城工惠', '国企优品', '文旅惠'][i % 4]],
+          source:
+            i % 3 === 0 ? '标签圈选' : i % 3 === 1 ? '维度筛选' : '标签+维度',
         })),
         portrait: {
           gender: [

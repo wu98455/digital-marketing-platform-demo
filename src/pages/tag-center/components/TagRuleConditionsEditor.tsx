@@ -799,6 +799,13 @@ const USER_BEHAVIOR_FEEDBACK = ['高活跃', '中活跃', '低活跃', '沉默',
   label: v,
   value: v,
 }));
+const USER_BEHAVIOR_ACTIONS = [
+  { label: '浏览', value: '浏览' },
+  { label: '加购', value: '加购' },
+  { label: '分享', value: '分享' },
+  { label: '收藏', value: '收藏' },
+  { label: '搜索', value: '搜索' },
+];
 const USER_BEHAVIOR_INTERACTIONS = ['分享', '收藏', '评论', '领券', '签到', '客服咨询'].map(
   (v) => ({ label: v, value: v }),
 );
@@ -807,7 +814,7 @@ const UserBehaviorFields: React.FC<{
   g: ConditionGroupMap['userBehavior'];
   onPatch: (p: Partial<ConditionGroupMap['userBehavior']>) => void;
 }> = ({ g, onPatch }) => (
-  <div style={{ maxWidth: 360 }}>
+  <Space wrap size={[16, 12]} style={{ width: '100%' }}>
     <ProFormSelect
       label="时间节点"
       options={USER_BEHAVIOR_TIME_NODES}
@@ -816,6 +823,19 @@ const UserBehaviorFields: React.FC<{
         placeholder: '可选',
         value: g.timeNode,
         onChange: (v) => onPatch({ timeNode: v }),
+        style: { width: 140 },
+      }}
+    />
+    <ProFormSelect
+      label="行为动作"
+      options={USER_BEHAVIOR_ACTIONS}
+      fieldProps={{
+        mode: 'multiple',
+        allowClear: true,
+        placeholder: '浏览/加购/分享等',
+        value: g.behaviorActions,
+        onChange: (v) => onPatch({ behaviorActions: v }),
+        style: { width: 220 },
       }}
     />
     <ProFormSelect
@@ -826,6 +846,7 @@ const UserBehaviorFields: React.FC<{
         placeholder: '可选',
         value: g.eventCondition,
         onChange: (v) => onPatch({ eventCondition: v }),
+        style: { width: 140 },
       }}
     />
     <ProFormSelect
@@ -836,6 +857,7 @@ const UserBehaviorFields: React.FC<{
         placeholder: '可选',
         value: g.dataFeedback,
         onChange: (v) => onPatch({ dataFeedback: v }),
+        style: { width: 140 },
       }}
     />
     <ProFormSelect
@@ -846,9 +868,10 @@ const UserBehaviorFields: React.FC<{
         placeholder: '可选',
         value: g.interactionBehavior,
         onChange: (v) => onPatch({ interactionBehavior: v }),
+        style: { width: 140 },
       }}
     />
-  </div>
+  </Space>
 );
 
 const DimPanel: React.FC<{
@@ -937,7 +960,7 @@ const TagRuleConditionsEditor: React.FC<Props> = ({ value, onChange }) => {
   return (
     <div style={{ width: '100%', display: 'block' }}>
       <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-        按经营分析维度筛选要打标的人；多维度之间为「且」。字段对齐现网列表/工坊可搜条件。
+        按业务维度筛选要打标的人；多维度之间为「且」。字段对齐现网列表/工坊可搜条件。
       </Typography.Text>
       <style>{`
         .tag-rule-dim-tabs {

@@ -8,14 +8,46 @@ import {
   ProFormTextArea,
   ProTable,
 } from '@ant-design/pro-components';
-import { history, request, useModel } from '@umijs/max';
-import { Button, Checkbox, Dropdown, Modal, Space, message } from 'antd';
+import { history, request, useAccess, useModel } from '@umijs/max';
+import { Button, Checkbox, Dropdown, Modal, Space, Tag, message } from 'antd';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import CenterTags from '@/components/CenterTags';
+import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
+import { useAllowedCenters } from '@/utils/useAllowedCenters';
 
 /** 仅正式执行过的活动展示「执行结果」入口 */
 const canViewExecResult = (status?: string) =>
   ['进行中', '已暂停', '已结束'].includes(status || '');
+
+/** 浅底色 Tag + 左侧实心圆点（对齐设计稿「校验状态」样式） */
+const ACTIVITY_STATUS_TAG: Record<string, string> = {
+  草稿: 'default',
+  待审批: 'processing',
+  已通过: 'success',
+  已驳回: 'error',
+  进行中: 'processing',
+  已暂停: 'warning',
+  已结束: 'default',
+};
+
+const ActivityStatusTag: React.FC<{ status: string }> = ({ status }) => (
+  <Tag
+    color={ACTIVITY_STATUS_TAG[status] || 'default'}
+    style={{ marginInlineEnd: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+  >
+    <span
+      style={{
+        width: 6,
+        height: 6,
+        borderRadius: '50%',
+        background: 'currentColor',
+        flexShrink: 0,
+      }}
+    />
+    {status}
+  </Tag>
+);
 
 type ActivityItem = {
   id: string;
@@ -29,6 +61,7 @@ type ActivityItem = {
   canEdit?: boolean;
   canDelete?: boolean;
   pinned?: boolean;
+  centers?: string[];
 };
 
 type TemplateOption = { id: string; name: string };
@@ -43,7 +76,10 @@ const PROTECTED = new Set(['未分类']);
 
 const ActivityList: React.FC = () => {
   const { initialState } = useModel('@@initialState');
-  const CURRENT_USER = initialState?.currentUser?.username || 'demo';
+  const access = useAccess();
+  const CURRENT_USER = String(initialState?.currentUser?.username || 'demo');
+  const canExecute = !!access.canActivityExecute;
+  const { options: centerOptions } = useAllowedCenters();
   const actionRef = useRef<ActionType | null>(null);
   const createFormRef = useRef<ProFormInstance>(undefined);
   const [catalogs, setCatalogs] = useState<string[]>(DEFAULT_CATALOGS);
@@ -206,6 +242,42 @@ const ActivityList: React.FC = () => {
     });
   };
 
+  const handleFormalRun = (row: ActivityItem) => {
+    const resume = row.status === '已暂停';
+    Modal.confirm({
+      title: resume ? `恢复执行「${row.name}」？` : `正式执行「${row.name}」？`,
+      content: resume
+        ? '活动将从已暂停恢复为进行中。'
+        : '确认后活动进入进行中，开始正式投放（演示）。',
+      okText: resume ? '恢复执行' : '正式执行',
+      onOk: async () => {
+        const res = await request<{ success: boolean; errorMessage?: string }>(
+          `/api/crowd-marketing/activities/${row.id}/formal-run`,
+          { method: 'POST', data: { currentUser: CURRENT_USER } },
+        );
+        if (res?.success === false) {
+          message.error(res.errorMessage || '须审批通过后才能正式执行');
+          return;
+        }
+        message.success(resume ? '已恢复执行' : '已开始正式执行');
+        actionRef.current?.reload();
+      },
+    });
+  };
+
+  const handlePause = async (row: ActivityItem) => {
+    const res = await request<{ success: boolean; errorMessage?: string }>(
+      `/api/crowd-marketing/activities/${row.id}/pause`,
+      { method: 'POST', data: { currentUser: CURRENT_USER } },
+    );
+    if (res?.success === false) {
+      message.error(res.errorMessage || '无法暂停');
+      return;
+    }
+    message.success('已暂停');
+    actionRef.current?.reload();
+  };
+
   const columns: ProColumns<ActivityItem>[] = [
     { title: '活动名称/ID', dataIndex: 'keyword', hideInTable: true },
     {
@@ -238,6 +310,13 @@ const ActivityList: React.FC = () => {
     },
     { title: '创建人', dataIndex: 'creatorSearch', hideInTable: true },
     {
+      title: '分中心',
+      dataIndex: 'centerSearch',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
+    },
+    {
       title: '是否周期活动',
       dataIndex: 'periodicSearch',
       hideInTable: true,
@@ -267,7 +346,24 @@ const ActivityList: React.FC = () => {
         </Space>
       ),
     },
-    { title: '状态', dataIndex: 'status', search: false, width: 90 },
+    {
+      title: '分中心',
+      dataIndex: 'centers',
+      search: false,
+      width: 180,
+      render: (_, row) => {
+        const n = Number(String(row.id).replace(/\D/g, '') || 0);
+        const fallback = [MARKETING_CENTERS[n % MARKETING_CENTERS.length]];
+        return <CenterTags centers={row.centers?.length ? row.centers : fallback} />;
+      },
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      search: false,
+      width: 110,
+      render: (_, row) => <ActivityStatusTag status={row.status} />,
+    },
     { title: '分类', dataIndex: 'catalog', search: false, width: 100 },
     {
       title: '周期活动',
@@ -282,11 +378,16 @@ const ActivityList: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 220,
+      width: 280,
       search: false,
       fixed: 'right',
       render: (_, row) => {
-        const canDecide = row.status === '待审批' && row.approver === CURRENT_USER;
+        /** 仅指定审批人可见通过/驳回 */
+        const canDecide =
+          row.status === '待审批' && String(row.approver || '') === CURRENT_USER;
+        const canFormalRun = canExecute && row.status === '已通过';
+        const canResume = canExecute && row.status === '已暂停';
+        const canPause = row.status === '进行中';
         return (
           <div className="table-op-row">
             {canDecide ? (
@@ -295,6 +396,11 @@ const ActivityList: React.FC = () => {
                 <a onClick={() => handleReject(row)}>驳回</a>
               </>
             ) : null}
+            {canFormalRun ? (
+              <a onClick={() => handleFormalRun(row)}>正式执行</a>
+            ) : null}
+            {canResume ? <a onClick={() => handleFormalRun(row)}>恢复执行</a> : null}
+            {canPause ? <a onClick={() => handlePause(row)}>暂停</a> : null}
             <a
               className={row.canEdit === false ? 'disabled' : undefined}
               onClick={() => openEditActivity(row)}
@@ -430,6 +536,7 @@ const ActivityList: React.FC = () => {
               status: params.statusSearch,
               catalog: params.catalogSearch,
               creator: params.creatorSearch,
+              center: params.centerSearch,
               periodic:
                 params.periodicSearch && params.periodicSearch !== '全部'
                   ? params.periodicSearch
@@ -509,6 +616,18 @@ const ActivityList: React.FC = () => {
         }}
       >
         <ProFormText name="name" label="活动名称" rules={[{ required: true }]} />
+        <ProFormSelect
+          name="centers"
+          label="分中心"
+          options={centerOptions}
+          rules={[{ required: true, message: '请选择分中心' }]}
+          fieldProps={{
+            mode: 'multiple',
+            placeholder: centerOptions.length ? '请选择分中心' : '当前角色未配置分中心',
+            disabled: !centerOptions.length,
+          }}
+          extra="选项来自角色「数据权限 · 分中心」"
+        />
         {formMode === 'create' ? (
           <ProFormSelect
             name="template"

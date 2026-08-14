@@ -1,8 +1,10 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
-import { request } from '@umijs/max';
-import { Tag, Tooltip } from 'antd';
+import { history, request } from '@umijs/max';
+import { Space, Tag, Tooltip, Typography } from 'antd';
 import React, { useRef } from 'react';
+import CenterTags from '@/components/CenterTags';
+import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
 
 type ActivityExecRecord = {
@@ -16,6 +18,7 @@ type ActivityExecRecord = {
   targetCount: number;
   reachSuccess: number;
   reachFail: number;
+  centers?: string[];
 };
 
 const statusColor: Record<string, string> = {
@@ -53,6 +56,13 @@ const ActivityExecRecordPage: React.FC = () => {
       valueType: 'select',
       initialValue: '全部',
       valueEnum: { 全部: { text: '全部' }, 是: { text: '是' }, 否: { text: '否' } },
+    },
+    {
+      title: '分中心',
+      dataIndex: 'centerSearch',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
     },
     {
       title: '开始时间',
@@ -94,6 +104,17 @@ const ActivityExecRecordPage: React.FC = () => {
       render: (_, row) => <Tag color={statusColor[row.status] || 'default'}>{row.status}</Tag>,
     },
     {
+      title: '分中心',
+      dataIndex: 'centers',
+      search: false,
+      width: 180,
+      render: (_, row) => {
+        const n = Number(String(row.activityId).replace(/\D/g, '') || 0);
+        const fallback = [MARKETING_CENTERS[n % MARKETING_CENTERS.length]];
+        return <CenterTags centers={row.centers?.length ? row.centers : fallback} />;
+      },
+    },
+    {
       title: '开始时间',
       dataIndex: 'startAt',
       search: false,
@@ -125,6 +146,30 @@ const ActivityExecRecordPage: React.FC = () => {
       search: false,
       width: 100,
     },
+    {
+      title: '操作',
+      valueType: 'option',
+      search: false,
+      width: 100,
+      fixed: 'right',
+      render: (_, row) => {
+        const canView = ['成功', '失败', '部分成功', '执行中'].includes(row.status);
+        if (!canView) {
+          return <Typography.Text type="secondary">—</Typography.Text>;
+        }
+        return (
+          <Space size={8}>
+            <a
+              onClick={() =>
+                history.push(`/crowd-marketing/node-record/result/${row.id}`)
+              }
+            >
+              执行结果
+            </a>
+          </Space>
+        );
+      },
+    },
   ];
 
   return (
@@ -135,8 +180,8 @@ const ActivityExecRecordPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         search={listSearchProps}
-        pagination={listPagination}
-        scroll={{ x: 1100 }}
+        pagination={listPagination as any}
+        scroll={{ x: 1300 }}
         request={async (params) => {
           const range = params.startAtRange as string[] | undefined;
           return request('/api/crowd-marketing/node-records', {
@@ -149,6 +194,7 @@ const ActivityExecRecordPage: React.FC = () => {
                 params.periodicSearch && params.periodicSearch !== '全部'
                   ? params.periodicSearch
                   : undefined,
+              center: params.centerSearch,
               startAtRange: range?.length === 2 ? range.join(',') : undefined,
             },
           });

@@ -113,7 +113,7 @@ export const TagCatalogProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setCatalogs((prev) => {
       const exists = prev[kind].some((g) => g.tags.includes(t));
       if (exists) {
-        err = '同库下标签名不能重复';
+        err = '标签名称已存在，请换一个名称';
         return prev;
       }
       const list = prev[kind].map((g) =>
@@ -137,7 +137,7 @@ export const TagCatalogProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         (g) => g.tags.includes(newTag) && !(g.group === from.group && newTag === from.tag),
       );
       if (conflict) {
-        err = '同库下标签名不能重复';
+        err = '标签名称已存在，请换一个名称';
         return prev;
       }
       // remove from old group

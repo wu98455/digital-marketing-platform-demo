@@ -16,6 +16,8 @@ type Props = {
    * append：在原有基础上追加所选新增项（批量）
    */
   mode?: 'replace' | 'append';
+  /** 成功提示；传 false 则不提示 */
+  successMessage?: string | false;
   onSave: (next: TagItem[]) => void;
 };
 
@@ -26,6 +28,7 @@ const TagPickerModal: React.FC<Props> = ({
   catalog,
   value = [],
   mode = 'replace',
+  successMessage,
   onSave,
 }) => {
   const [keyword, setKeyword] = useState('');
@@ -78,7 +81,12 @@ const TagPickerModal: React.FC<Props> = ({
       next = selected;
     }
     onSave(next);
-    message.success(mode === 'append' ? '已追加标签（演示）' : '已保存标签（演示）');
+    if (successMessage !== false) {
+      message.success(
+        successMessage ||
+          (mode === 'append' ? '已追加标签（演示）' : '已保存标签（演示）'),
+      );
+    }
     onOpenChange(false);
   };
 
