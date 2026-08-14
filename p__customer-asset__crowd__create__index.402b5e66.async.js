@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkdigital_marketing_platform_demo=self.webpackChunkdigital_marketing_platform_demo||[]).push([[414],{98790:function(u,t,e){e.r(t);var r=e(30537),a=e(18343),n=function(){return(0,a.useEffect)(function(){r.history.replace("/crowd?create=1")},[]),null};t.default=n}}]);
