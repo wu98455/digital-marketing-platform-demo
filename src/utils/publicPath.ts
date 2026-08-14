@@ -24,7 +24,8 @@ export function withPublicPath(assetPath: string): string {
 
 /**
  * 去掉 GitHub Pages 子路径前缀，得到 history 可用的路由 path。
- * 例如 /digital-marketing-platform-demo/welcome → /welcome
+ * 例如 /digital-marketing-platform-demo/analytics → /analytics
+ * （兼容旧路径 /welcome → 会经路由重定向到 /analytics）
  */
 export function stripPublicPath(pathname: string): string {
   const base = getPublicPath().replace(/\/$/, '');

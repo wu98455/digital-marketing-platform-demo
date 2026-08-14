@@ -1,5 +1,5 @@
 export default {
-  'menu.welcome': '经营分析',
+  'menu.welcome': '经营分析（二期）',
   'menu.login': '登录',
   'menu.tag-center': '数据打标',
   'menu.tag-center.tag-center-list': '人群标签',

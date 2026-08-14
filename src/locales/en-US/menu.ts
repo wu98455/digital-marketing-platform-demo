@@ -1,5 +1,5 @@
 export default {
-  'menu.welcome': 'Welcome',
+  'menu.welcome': 'Analytics (Phase 2)',
   'menu.login': 'Login',
   'menu.tag-center': 'Data Tagging',
   'menu.tag-center.tag-center-list': 'Audience Tags',

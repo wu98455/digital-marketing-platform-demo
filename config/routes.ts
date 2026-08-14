@@ -1,5 +1,5 @@
 /**
- * 数字营销平台 · 菜单：欢迎 → 数据打标 → 目标人群 → 营销管理 → 系统管理
+ * 数字营销平台 · 菜单：经营分析 → 数据打标 → 目标人群 → 营销管理 → 系统管理
  */
 export default [
   {
@@ -14,12 +14,14 @@ export default [
     ],
   },
   {
-    path: '/welcome',
+    path: '/analytics',
     name: 'welcome',
     icon: 'home',
     component: './Welcome',
     access: 'canWelcome',
   },
+  /** 旧欢迎页路径兼容跳转 */
+  { path: '/welcome', redirect: '/analytics' },
   {
     path: '/tag-center',
     name: 'tag-center',
@@ -356,7 +358,7 @@ export default [
   { path: '/customer-asset/crowd/custom', redirect: '/crowd' },
   {
     path: '/',
-    redirect: '/tag-center/list',
+    redirect: '/analytics',
   },
   {
     path: '*',

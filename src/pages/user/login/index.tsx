@@ -23,7 +23,7 @@ import { getFakeCaptcha } from '@/services/ant-design-pro/login';
 import { stripPublicPath, withPublicPath } from '@/utils/publicPath';
 import Settings from '../../../../config/defaultSettings';
 
-const DEFAULT_HOME = '/welcome';
+const DEFAULT_HOME = '/analytics';
 
 /**
  * Validate redirect URL to prevent open redirect attacks.

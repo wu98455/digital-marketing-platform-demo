@@ -82,7 +82,7 @@ export type OrgPerson = {
 
 const USERS_KEY = 'dmp-system-users-v2';
 const ROLES_KEY = 'dmp-system-roles-v2';
-const MENU_TREE_KEY = 'dmp-system-menu-tree-v9';
+const MENU_TREE_KEY = 'dmp-system-menu-tree-v10';
 const AUDIT_KEY = 'dmp-system-audit';
 const ORG_TREE_KEY = 'dmp-system-org-tree-v3';
 const ORG_PERSONS_KEY = 'dmp-system-org-persons-v3';
@@ -220,8 +220,8 @@ export const DEFAULT_USERS: SystemUser[] = [
 export const DEFAULT_MENU_TREE: MenuTreeNode[] = [
   {
     key: 'welcome',
-    path: '/welcome',
-    name: '经营分析',
+    path: '/analytics',
+    name: '经营分析（二期）',
     icon: 'HomeOutlined',
     builtin: true,
     order: 0,

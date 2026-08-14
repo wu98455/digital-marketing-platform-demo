@@ -101,7 +101,7 @@ const AnalyticsPage: React.FC = () => {
     return (
       <PageContainer title={false}>
         <Card>
-          <Typography.Title level={4}>经营分析</Typography.Title>
+          <Typography.Title level={4}>经营分析（二期）</Typography.Title>
           <Typography.Paragraph type="secondary">
             当前账号角色未配置分中心数据权限，请联系管理员在「系统管理 · 角色权限」中勾选分中心。
           </Typography.Paragraph>
@@ -127,7 +127,7 @@ const AnalyticsPage: React.FC = () => {
         >
           <div>
             <Typography.Title level={4} style={{ marginTop: 0, marginBottom: 4 }}>
-              经营分析
+              经营分析（二期）
             </Typography.Title>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               当前账号：{initialState?.currentUser?.name || '--'} · 按分中心与时间范围查看价值人群、行为与触达成本
