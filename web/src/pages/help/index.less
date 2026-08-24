@@ -1,0 +1,110 @@
+.helpPage {
+  :global {
+    .ant-pro-page-container-children-container {
+      padding-block-start: 0;
+    }
+  }
+}
+
+.layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.toc {
+  position: sticky;
+  top: 16px;
+  flex: 0 0 200px;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  padding: 12px 8px 12px 0;
+}
+
+.tocMobile {
+  display: none;
+  margin-bottom: 16px;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.card {
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:hover {
+    border-color: var(--ant-color-primary, #1677ff);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+}
+
+.section {
+  margin-bottom: 32px;
+  padding-top: 8px;
+  scroll-margin-top: 80px;
+}
+
+.sectionTitle {
+  margin-bottom: 8px !important;
+}
+
+.summary {
+  margin-bottom: 12px;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.steps {
+  margin: 0 0 12px;
+  padding-inline-start: 20px;
+
+  li {
+    margin-bottom: 6px;
+    line-height: 1.6;
+  }
+}
+
+.notes {
+  margin-bottom: 12px;
+}
+
+.links {
+  margin-top: 8px;
+}
+
+.faqItem {
+  margin-bottom: 16px;
+
+  .q {
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .a {
+    color: rgba(0, 0, 0, 0.65);
+    line-height: 1.6;
+  }
+}
+
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .toc {
+    display: none;
+  }
+
+  .tocMobile {
+    display: block;
+  }
+}

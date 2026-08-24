@@ -1,34 +1,26 @@
 # 数字营销平台
 
-基于 [Ant Design Pro v6](https://github.com/ant-design/ant-design-pro) **simple 精简版**（Umi Max 4 + ProComponents v3）的客户原型项目。
+Ant Design Pro（Umi Max）数字营销管理端 **演示 / 原型**。
 
-## 项目信息
+**换机、清历史、不知道从哪开始？请先打开 → [`.docs/`](.docs/README.md)**  
+（对照表、安装启动、禁止拷贝 `node_modules`、部署步骤都在里面。）
 
-| 项 | 值 |
-|---|---|
-| 本地路径 | `D:\dev\projects\数字营销平台` |
-| GitHub 仓库名 | `digital-marketing-platform-demo` |
-| Demo（部署后） | https://wu98455.github.io/digital-marketing-platform-demo/ |
-| 演示账号 | `admin / 123456`（超管）或 `demo / 123456`、`tagger / 123456`、`marketer / 123456` |
-
-详细对照见 `项目对照表.md`。
-
-## 本地开发
+## 最快启动
 
 ```powershell
-cd D:\dev\projects\数字营销平台
+cd web
 pnpm install
 pnpm start
 ```
 
-浏览器打开 http://localhost:8000
+http://localhost:8000 · 账号见 [`.docs/项目对照表.md`](.docs/项目对照表.md)
 
-## 部署 GitHub Pages
+## Git 里有什么
 
-仅在明确需要上线时执行：
+| 路径 | 说明 |
+|------|------|
+| `web/` | 唯一工程（源码 / 依赖声明 / Mock） |
+| `.docs/` | 操作手册（本项目怎么开、怎么部署） |
+| `.github/` | Pages 自动部署 |
 
-```powershell
-pnpm run build:pages
-```
-
-推送 `main` 分支后，GitHub Actions 会自动部署（需先创建远程仓库并开启 Pages）。
+其余本地文件夹（如 `文档/`、分析用代码）**不进 Git、不部署**。

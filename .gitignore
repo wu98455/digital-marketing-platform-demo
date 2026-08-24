@@ -1,54 +1,48 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# =============================================================================
+# Git 跟踪范围（本仓库约定）
+# - 提交：web/（唯一工程）、.docs/（启动/部署/模板说明）、.github/（Pages CI）
+# - 以及根目录：.gitignore、README.md（入口指路）
+# - 不提交：文档/（本地需求调研）、.cursor/、分析用代码等
+# =============================================================================
 
-# dependencies
-**/node_modules
-# roadhog-api-doc ignore
-/src/utils/request-temp.js
-_roadhog-api-doc
+# 默认忽略仓库根下所有路径
+/*
 
-# production
-/dist
+# 允许提交的根级入口
+!/.gitignore
+!/README.md
+!/.docs/
+!/.docs/**
+!/.github/
+!/.github/**
+!/web/
+!/web/**
 
-# misc
-.DS_Store
-npm-debug.log*
-yarn-error.log
+# --- web 工程内仍忽略依赖与构建产物 ---
+web/node_modules/
+web/dist/
+web/coverage/
+web/**/.umi/
+web/**/.umi-production/
+web/**/.umi-test/
+web/**/.umi-undefined/
+web/.turbopack/
+web/**/screenshot/
+web/.firebase/
+web/.wrangler/
+web/requestRecord.mock.js
 
-/coverage
-.idea
-yarn.lock
-*bak
-.vscode
+# 通用噪音（任意位置）
+**/node_modules/
+**/.DS_Store
+**/npm-debug.log*
+**/yarn-error.log*
+**/*.log
+**/.idea/
+**/.vscode/
+**/.history/
+**/*bak
+**/build/
 
-
-# visual studio code
-.history
-*.log
-functions/*
-.temp/**
-
-# claude code local settings
-.claude/settings.local.json
-
-# umi
-.umi
-.umi-production
-.umi-test
-.umi-undefined
-.turbopack
-
-# screenshot
-screenshot
-.firebase
-
-build
-
-# worktrees
-.worktrees
-
-# superpowers docs
-docs/superpowers
-
-# cloudflare wrangler
-.wrangler
-requestRecord.mock.js
+# 本地分析参考代码（非工程、不部署）
+**/小程序代码/
