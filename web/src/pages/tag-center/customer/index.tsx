@@ -1,7 +1,7 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import { history, request, useLocation } from '@umijs/max';
-import { Button, Space } from 'antd';
+import { Cascader } from 'antd';
 import React, { useMemo, useRef, useState } from 'react';
 import CenterTags from '@/components/CenterTags';
 import TitleWithTip from '@/components/TitleWithTip';
@@ -13,8 +13,7 @@ import {
 } from '@/components/Tagging';
 import { MARKETING_CENTERS } from '@/utils/centers';
 import { listPagination, listSearchProps } from '@/utils/listSearch';
-import RegionSelectModal from '@/pages/customer-asset/customer-list/components/RegionSelectModal';
-import StoreSelectModal from '@/pages/customer-asset/customer-list/components/StoreSelectModal';
+import { REGION_CASCADE } from '@/utils/tagRuleTypes';
 
 export type CustomerItem = {
   id: string;
@@ -32,10 +31,16 @@ export type CustomerItem = {
   gender?: string;
   birthday?: string;
   constellation?: string;
-  storeName?: string;
   tags?: { group: string; tags: string[] }[];
   tagInstances?: { group: string; tag: string; source?: string }[];
   centers?: string[];
+  userType?: string;
+  availablePoints?: number;
+  orderCount?: number;
+  consumeAmount?: number;
+  pointsExchangeOrderCount?: number;
+  enterWay?: string;
+  registeredAt?: string;
 };
 
 const seedCenters = (id: string): string[] => {
@@ -49,17 +54,17 @@ const seedTags = (id: string): TagItem[] => {
   if (n % 5 === 0) return [];
   if (n % 3 === 0) {
     return [
-      { group: '客户价值', tag: '高价值' },
-      { group: '生命周期', tag: '活跃' },
+      { group: '消费类', tag: '近90天订单金额大于等于500' },
+      { group: '行为类', tag: '近7天有登录' },
     ];
   }
   if (n % 2 === 0) {
     return [
-      { group: '兴趣偏好', tag: '亲子游' },
-      { group: '生命周期', tag: '新客' },
+      { group: '基础属性', tag: 'VIP001会员' },
+      { group: '节日', tag: '端午重宾粽礼意向' },
     ];
   }
-  return [{ group: '客户价值', tag: '大会员' }];
+  return [{ group: '消费类', tag: '可用积分大于等于1000' }];
 };
 
 type Props = {
@@ -68,22 +73,21 @@ type Props = {
 
 const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
   const location = useLocation();
-  const resolvedTitle =
-    headerTitle ||
-    (location.pathname.startsWith('/tag-center/customer') ? '人员数据' : '会员标签');
-  const titleTip = '人员标签由人群标签规则命中产生，本页仅查看，不可手动打标。';
+  const isPlatformMembers =
+    location.pathname.startsWith('/platform-members') ||
+    location.pathname.startsWith('/tag-center/customer');
+  const resolvedTitle = headerTitle || (isPlatformMembers ? '平台会员' : '会员标签');
+  const titleTip = isPlatformMembers
+    ? '按账号平台数据权限展示对应平台的全量会员；命中标签只读，来自人群标签规则。'
+    : '人员标签由人群标签规则命中产生，本页仅查看，不可手动打标。';
   const { getCatalog } = useTagCatalog();
   const catalog = getCatalog('customer');
   const actionRef = useRef<ActionType | null>(null);
   const [pageInfo, setPageInfo] = useState({ current: 1, pageSize: 10 });
-  const [storeOpen, setStoreOpen] = useState(false);
-  const [selectedStores, setSelectedStores] = useState<{ id: string; name: string }[]>([]);
-  const [regionOpen, setRegionOpen] = useState(false);
-  const [selectedRegions, setSelectedRegions] = useState<{ code: string; name: string }[]>([]);
 
-  const viewBase = location.pathname.startsWith('/tag-center')
-    ? '/tag-center/customer'
-    : '/customer-asset/customer-list';
+  const viewBase = location.pathname.startsWith('/customer-asset')
+    ? '/customer-asset/customer-list'
+    : '/platform-members';
 
   const getTags = (row: CustomerItem): TagItem[] => {
     if (row.tagInstances?.length) {
@@ -93,56 +97,98 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
     return seedTags(row.id);
   };
 
-  const tagFilterOptions = useMemo(
+  const tagCascadeOptions = useMemo(
     () =>
-      catalog.flatMap((g) =>
-        g.tags.map((t) => ({ label: `${g.group}/${t}`, value: `${g.group}::${t}` })),
-      ),
+      catalog.map((g) => ({
+        label: g.group,
+        value: g.group,
+        children: g.tags.map((t) => ({
+          label: t,
+          value: t,
+        })),
+      })),
     [catalog],
   );
 
   const columns: ProColumns<CustomerItem>[] = [
+    // —— 筛选顺序：手机号 → OneID → 标签 → 用户类型 → 平台 → 姓名 → 性别 → 年龄 → 地区 ——
     {
-      title: '店铺',
-      dataIndex: 'storeFilter',
+      title: '手机号',
+      dataIndex: 'phone',
       hideInTable: true,
-      formItemRender: () => (
-        <Button type="link" onClick={() => setStoreOpen(true)} style={{ paddingLeft: 0 }}>
-          {selectedStores.length > 0 ? `已选择 ${selectedStores.length} 个` : '选择店铺'}
-        </Button>
-      ),
+      fieldProps: { placeholder: '请输入手机号' },
+      order: 9,
     },
-    { title: '手机号', dataIndex: 'phone', hideInTable: true },
     {
-      title: '人员 OneID',
+      title: '会员 OneID',
       dataIndex: 'oneIdSearch',
       hideInTable: true,
       fieldProps: { placeholder: '如 OID202608120001' },
+      order: 8,
+    },
+    {
+      title: '标签',
+      dataIndex: 'tagPaths',
+      hideInTable: true,
+      valueType: 'cascader',
+      order: 7,
+      fieldProps: {
+        multiple: true,
+        allowClear: true,
+        changeOnSelect: false,
+        expandTrigger: 'hover',
+        showSearch: true,
+        maxTagCount: 'responsive',
+        placeholder: '分类 / 标签（可多选、可搜索）',
+        options: tagCascadeOptions,
+        showCheckedStrategy: Cascader.SHOW_CHILD,
+        popupClassName: 'platform-members-tag-cascader-popup',
+      },
+    },
+    {
+      title: '用户类型',
+      dataIndex: 'userTypeSearch',
+      hideInTable: true,
+      valueType: 'select',
+      order: 6,
+      fieldProps: {
+        allowClear: true,
+        options: [
+          { label: '会员', value: '会员' },
+          { label: '非会员', value: '非会员' },
+        ],
+        placeholder: '请选择',
+      },
+    },
+    {
+      title: '平台',
+      dataIndex: 'centerSearch',
+      hideInTable: true,
+      valueType: 'select',
+      order: 5,
+      valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
     },
     {
       title: '姓名',
       dataIndex: 'nameSearch',
       hideInTable: true,
       fieldProps: { placeholder: '请输入姓名' },
-    },
-    {
-      title: '分中心',
-      dataIndex: 'centerSearch',
-      hideInTable: true,
-      valueType: 'select',
-      valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
+      order: 4,
     },
     {
       title: '性别',
       dataIndex: 'genderSearch',
       hideInTable: true,
       valueType: 'select',
-      initialValue: '不限',
-      valueEnum: {
-        不限: { text: '不限' },
-        男: { text: '男' },
-        女: { text: '女' },
-        未知: { text: '未知' },
+      order: 3,
+      fieldProps: {
+        allowClear: true,
+        options: [
+          { label: '男', value: '男' },
+          { label: '女', value: '女' },
+          { label: '未知', value: '未知' },
+        ],
+        placeholder: '请选择',
       },
     },
     {
@@ -150,44 +196,45 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
       dataIndex: 'ageRange',
       hideInTable: true,
       valueType: 'digitRange',
-      fieldProps: { placeholder: ['请输入', '请输入'] },
+      order: 2,
+      fieldProps: { placeholder: ['最小', '最大'] },
       search: {
         transform: (value) => ({ ageMin: value?.[0], ageMax: value?.[1] }),
       },
     },
     {
       title: '地区',
-      dataIndex: 'regionFilter',
+      dataIndex: 'regionPaths',
       hideInTable: true,
-      formItemRender: () => (
-        <Button type="link" onClick={() => setRegionOpen(true)} style={{ paddingLeft: 0 }}>
-          {selectedRegions.length > 0 ? `已选择 ${selectedRegions.length} 个` : '不限地区'}
-        </Button>
-      ),
-    },
-    {
-      title: '人员标签',
-      dataIndex: 'tagFilter',
-      hideInTable: true,
-      valueType: 'select',
+      valueType: 'cascader',
+      order: 1,
       fieldProps: {
-        mode: 'multiple',
-        options: tagFilterOptions,
-        placeholder: '按已打标签筛选',
+        multiple: true,
+        allowClear: true,
+        changeOnSelect: true,
+        expandTrigger: 'hover',
+        showSearch: true,
+        maxTagCount: 'responsive',
+        placeholder: '请选择省 / 市 / 区（可多选）',
+        options: REGION_CASCADE,
+        showCheckedStrategy: Cascader.SHOW_CHILD,
       },
     },
+    // —— 列表列 ——
     {
       title: '序号',
       dataIndex: 'index',
       search: false,
       width: 64,
+      fixed: 'left',
       render: (_, __, index) => (pageInfo.current - 1) * pageInfo.pageSize + index + 1,
     },
     {
-      title: '人员 OneID',
+      title: '会员 OneID',
       dataIndex: 'oneId',
       search: false,
       width: 150,
+      fixed: 'left',
       render: (_, row) =>
         row.oneId || `OID20260812${String(row.id).replace(/\D/g, '').padStart(4, '0')}`,
     },
@@ -195,12 +242,21 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
       title: '姓名',
       dataIndex: 'name',
       search: false,
+      width: 88,
       render: (v) => v || '--',
     },
     {
-      title: '最新手机号',
+      title: '手机号',
       dataIndex: 'phoneMasked',
       search: false,
+      width: 120,
+    },
+    {
+      title: '用户类型',
+      dataIndex: 'userType',
+      search: false,
+      width: 88,
+      render: (v) => v || '--',
     },
     {
       title: '性别',
@@ -217,22 +273,10 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
       render: (v) => v ?? '--',
     },
     {
-      title: '省市',
-      dataIndex: 'province',
-      search: false,
-      render: (_, row) => [row.province, row.city].filter(Boolean).join(' ') || '--',
-    },
-    {
-      title: '关联店铺',
-      dataIndex: 'storeName',
-      search: false,
-      render: (_, row) => row.storeName || selectedStores[0]?.name || '惠游重庆',
-    },
-    {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centers',
       search: false,
-      width: 180,
+      width: 160,
       render: (_, row) => (
         <CenterTags centers={row.centers?.length ? row.centers : seedCenters(row.id)} />
       ),
@@ -241,7 +285,7 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
       title: '标签',
       dataIndex: 'tags',
       search: false,
-      width: 280,
+      width: 240,
       render: (_, row) => (
         <TagChips tags={getTags(row)} catalog={catalog} emptyText="暂无标签" />
       ),
@@ -250,7 +294,8 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
       title: '操作',
       valueType: 'option',
       search: false,
-      width: 80,
+      width: 72,
+      fixed: 'right',
       render: (_, row) => [
         <a key="view" onClick={() => history.push(`${viewBase}/view/${row.id}`)}>
           详情
@@ -261,12 +306,24 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
 
   return (
     <PageContainer title={false}>
+      <style>{`
+        .platform-members-tag-cascader-popup .ant-cascader-menu {
+          height: 240px !important;
+          max-height: 240px !important;
+          min-width: max-content;
+          width: auto;
+        }
+        .platform-members-tag-cascader-popup .ant-cascader-menu-item {
+          white-space: nowrap;
+        }
+      `}</style>
       <ProTable<CustomerItem>
         headerTitle={<TitleWithTip title={resolvedTitle} tip={titleTip} />}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        search={listSearchProps}
+        search={{ ...listSearchProps, defaultColsNumber: 9 }}
+        scroll={{ x: 1200 }}
         pagination={{
           ...listPagination,
           current: pageInfo.current,
@@ -274,16 +331,12 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
           onChange: (current: number, pageSize: number) =>
             setPageInfo({ current, pageSize: pageSize || pageInfo.pageSize }),
         } as any}
-        toolBarRender={() => [
-          <Space key="store">
-            {selectedStores.length > 0 && (
-              <span style={{ color: 'rgba(0,0,0,0.45)' }}>
-                当前筛选店铺：{selectedStores.map((s) => s.name).join('、')}
-              </span>
-            )}
-          </Space>,
-        ]}
         request={async (params) => {
+          const tagPaths = (params.tagPaths as string[][] | undefined) || [];
+          const tagKeys = tagPaths
+            .filter((p) => p?.length >= 2)
+            .map((p) => `${p[0]}::${p[p.length - 1]}`);
+          const regionPaths = (params.regionPaths as string[][] | undefined) || [];
           const res = await request<{
             data: CustomerItem[];
             total: number;
@@ -295,39 +348,22 @@ const CustomerTaggingList: React.FC<Props> = ({ headerTitle }) => {
               phone: params.phone,
               oneId: params.oneIdSearch,
               center: params.centerSearch,
-              storeIds: selectedStores.map((s) => s.id).join(','),
-              regionCodes: selectedRegions.map((r) => r.code).join(','),
+              userType: params.userTypeSearch,
+              gender: params.genderSearch,
+              ageMin: params.ageMin,
+              ageMax: params.ageMax,
+              tagKeys: tagKeys.join(','),
+              regionPath: regionPaths.map((p) => p.join('/')).join('|'),
             },
           });
-          const tagFilter = (params.tagFilter as string[]) || [];
           let data = res.data || [];
-          if (tagFilter.length) {
+          if (tagKeys.length) {
             data = data.filter((row) => {
-              const keys = new Set(getTags(row).map((t) => `${t.group}::${t.tag}`));
-              return tagFilter.every((k) => keys.has(k));
+              const set = new Set(getTags(row).map((t) => `${t.group}::${t.tag}`));
+              return tagKeys.every((k) => set.has(k));
             });
           }
-          return { ...res, data, total: tagFilter.length ? data.length : res.total };
-        }}
-      />
-      <StoreSelectModal
-        open={storeOpen}
-        value={selectedStores}
-        onCancel={() => setStoreOpen(false)}
-        onOk={(rows) => {
-          setSelectedStores(rows);
-          setStoreOpen(false);
-          actionRef.current?.reload();
-        }}
-      />
-      <RegionSelectModal
-        open={regionOpen}
-        value={selectedRegions}
-        onCancel={() => setRegionOpen(false)}
-        onOk={(rows) => {
-          setSelectedRegions(rows);
-          setRegionOpen(false);
-          actionRef.current?.reload();
+          return { ...res, data, total: tagKeys.length ? data.length : res.total };
         }}
       />
     </PageContainer>

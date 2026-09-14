@@ -17,12 +17,6 @@ const KIND_META: Record<
   Exclude<CatalogKind, 'customer'>,
   { label: string; listPath: string; api: string; tip: string }
 > = {
-  store: {
-    label: '店铺数据',
-    listPath: '/tag-center/store',
-    api: '/api/customer-asset/stores',
-    tip: '店铺标签可在本页直接手动打标，用于圈人条件。',
-  },
   product: {
     label: '商品数据',
     listPath: '/tag-center/product',
@@ -95,12 +89,9 @@ const EntityDetailPage: React.FC<Props> = ({ kind }) => {
       <ProCard>
         <ProDescriptions column={2}>
           <ProDescriptions.Item label="ID">{data?.id || id}</ProDescriptions.Item>
-          <ProDescriptions.Item label="名称">{data?.name || '—'}</ProDescriptions.Item>
+          <ProDescriptions.Item label="名称">{data?.name || '--'}</ProDescriptions.Item>
           {data?.platform ? (
             <ProDescriptions.Item label="平台">{data.platform}</ProDescriptions.Item>
-          ) : null}
-          {data?.storeId ? (
-            <ProDescriptions.Item label="店铺ID">{data.storeId}</ProDescriptions.Item>
           ) : null}
           {data?.status ? (
             <ProDescriptions.Item label="状态">
@@ -113,7 +104,7 @@ const EntityDetailPage: React.FC<Props> = ({ kind }) => {
           {data?.channel ? (
             <ProDescriptions.Item label="渠道">{data.channel}</ProDescriptions.Item>
           ) : null}
-          <ProDescriptions.Item label="分中心">
+          <ProDescriptions.Item label="平台">
             <CenterTags centers={data?.centers || []} />
           </ProDescriptions.Item>
           <ProDescriptions.Item label="标签" span={2}>
@@ -141,7 +132,6 @@ const EntityDetailPage: React.FC<Props> = ({ kind }) => {
   );
 };
 
-export const StoreDetailPage = () => <EntityDetailPage kind="store" />;
 export const ProductDetailPage = () => <EntityDetailPage kind="product" />;
 export const CampaignDetailPage = () => <EntityDetailPage kind="campaign" />;
 

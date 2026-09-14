@@ -1,0 +1,280 @@
+/* 经营分析：Data-Dense 栅格对齐（沿用 Ant Design Pro 色板） */
+.analytics-page {
+  --analytics-gap: 16px;
+  --analytics-pad: 16px;
+  --analytics-radius: 8px;
+  --analytics-border: var(--ant-color-border-secondary, #f0f0f0);
+  --analytics-muted: rgba(0, 0, 0, 0.45);
+  --analytics-title: rgba(0, 0, 0, 0.88);
+  --analytics-accent: #fa8c16;
+  --analytics-link: var(--ant-color-primary, #1677ff);
+  --analytics-tile-min-h: 96px;
+  --analytics-pair-min-h: 168px;
+
+  .analytics-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-bottom: var(--analytics-gap);
+  }
+
+  .analytics-section {
+    margin-bottom: var(--analytics-gap);
+    border-radius: var(--analytics-radius);
+  }
+
+  .analytics-section > .ant-card-body {
+    padding: var(--analytics-pad) 20px 20px;
+  }
+
+  .analytics-section.ant-card-loading {
+    min-height: 120px;
+  }
+
+  .analytics-filter-label {
+    color: var(--analytics-muted);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .sales-updated {
+    display: block;
+    margin-bottom: 16px;
+    font-size: 12px;
+    line-height: 20px;
+    color: var(--analytics-muted);
+  }
+
+  .sales-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.1fr) repeat(3, minmax(0, 1fr));
+    gap: 12px 16px;
+    align-items: stretch;
+  }
+
+  .sales-grid-4 {
+    grid-template-columns: minmax(220px, 1.15fr) repeat(3, minmax(0, 1fr));
+  }
+
+  .sales-metric {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 88px;
+    padding: 12px 14px;
+    border: 1px solid var(--analytics-border);
+    border-radius: 6px;
+    background: var(--ant-color-fill-quaternary, #fafafa);
+  }
+
+  .sales-metric.is-hero {
+    background: linear-gradient(180deg, #fff7e6 0%, #fff 72%);
+    border-color: #ffe7ba;
+  }
+
+  .sales-metric-label {
+    font-size: 12px;
+    line-height: 20px;
+    color: var(--analytics-muted);
+  }
+
+  .sales-metric-value {
+    margin-top: 8px;
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 30px;
+    color: var(--analytics-title);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sales-metric.is-hero .sales-metric-value {
+    font-size: 28px;
+    line-height: 36px;
+    color: var(--analytics-accent);
+  }
+
+  .sales-metric-value.is-accent {
+    color: var(--analytics-link);
+  }
+
+  .metric-unit {
+    margin-left: 4px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--analytics-muted);
+  }
+
+  /* 中部双栏等高 */
+  .analytics-pair {
+    margin-bottom: var(--analytics-gap);
+  }
+
+  .analytics-pair-col {
+    display: flex;
+    margin-bottom: 0;
+  }
+
+  .analytics-pair-col > .ant-card {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: var(--analytics-pair-min-h);
+  }
+
+  .analytics-pair-col > .ant-card > .ant-card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .entry-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    flex: 1;
+    align-content: stretch;
+  }
+
+  .entry-tile {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: var(--analytics-tile-min-h);
+    padding: 14px 12px;
+    border: 1px solid var(--analytics-border);
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  }
+
+  .entry-tile:hover {
+    border-color: var(--analytics-link);
+    box-shadow: 0 2px 8px rgba(22, 119, 255, 0.12);
+  }
+
+  .entry-tile:focus-visible {
+    outline: 2px solid var(--analytics-link);
+    outline-offset: 2px;
+  }
+
+  .entry-tile-label {
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--analytics-muted);
+  }
+
+  .entry-tile-value {
+    margin-top: 12px;
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 36px;
+    color: var(--analytics-title);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .entry-tile-suffix {
+    margin-left: 4px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--analytics-muted);
+  }
+
+  .channel-usage-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    flex: 1;
+    align-content: stretch;
+  }
+
+  .channel-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: var(--analytics-tile-min-h);
+    padding: 14px 16px;
+    border: 1px solid var(--analytics-border);
+    border-radius: 6px;
+    background: #fff;
+  }
+
+  .channel-panel-value {
+    margin-top: 12px;
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 36px;
+    color: var(--analytics-title);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .channel-panel-meta {
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--analytics-muted);
+  }
+
+  .analytics-table .ant-table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .analytics-table .ant-table-thead > tr > th {
+    white-space: nowrap;
+  }
+
+  .analytics-table .col-activity-time,
+  .analytics-table td.col-activity-time {
+    white-space: nowrap;
+  }
+
+  @media (max-width: 1199px) {
+    .sales-grid,
+    .sales-grid-4 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .sales-metric.is-hero {
+      grid-column: 1 / -1;
+    }
+
+    .entry-grid,
+    .channel-usage-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .analytics-pair-col {
+      margin-bottom: var(--analytics-gap);
+    }
+
+    .analytics-pair-col:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  @media (max-width: 575px) {
+    .sales-grid,
+    .sales-grid-4,
+    .entry-grid,
+    .channel-usage-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .sales-metric.is-hero {
+      grid-column: auto;
+    }
+
+    .sales-metric,
+    .entry-tile,
+    .channel-panel {
+      min-height: 80px;
+    }
+
+    .sales-metric.is-hero .sales-metric-value,
+    .entry-tile-value,
+    .channel-panel-value {
+      font-size: 24px;
+      line-height: 32px;
+    }
+  }
+}

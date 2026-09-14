@@ -2,7 +2,7 @@
 
 本目录是 **唯一前端工程**（Umi Max + Ant Design Pro）。安装、启动、构建都在这里。
 
-换机 / 清历史后的总说明：仓库根 [`.docs/`](../.docs/README.md)。
+换机 / 清历史后的总说明：仓库根 [README.md](../README.md)、[项目对照表.md](../项目对照表.md)。
 
 ## 环境
 
@@ -22,7 +22,7 @@ pnpm start
 - http://localhost:8000  
 - 稳定模式：`pnpm run start:stable`
 
-**不要**从其他机器/目录拷贝 `node_modules`；用 pnpm 安装（store 可用 `D:\dev\pnpm-store`）。详见 [.docs/工程手册.md](../.docs/工程手册.md)。
+**不要**从其他机器/目录拷贝 `node_modules`；用 pnpm 安装（store 可用 `D:\dev\pnpm-store`）。
 
 ## 演示账号
 
@@ -52,4 +52,4 @@ pnpm start
 
 ## 部署
 
-推送 `main` → Actions 在本目录构建并发布 `web/dist`。步骤与注意点见 [.docs/工程手册.md](../.docs/工程手册.md)；路径与账号见 [.docs/项目对照表.md](../.docs/项目对照表.md)。
+推送 `main` → Actions 在本目录构建并发布 `web/dist`。步骤见仓库根 [README.md](../README.md)；路径与账号见 [项目对照表.md](../项目对照表.md)。

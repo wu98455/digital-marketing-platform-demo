@@ -24,6 +24,8 @@ type ActivityRow = {
   catalog: string;
   creator: string;
   createdAt: string;
+  /** 正式执行时间；未执行则为空 */
+  executedAt?: string;
   periodic: boolean;
   mine: boolean;
   approver: string;
@@ -32,22 +34,389 @@ type ActivityRow = {
   pinned: boolean;
 };
 
+/** 中秋团圆礼遇触达（ACT202603）及置顶副本（ACT202600 / 中秋团圆礼遇触达-1） */
+function isFestivalCare4(item?: { id?: string; name?: string } | null) {
+  if (!item) return false;
+  return (
+    item.id === 'ACT202603' ||
+    item.id === 'ACT202600' ||
+    item.name === '中秋团圆礼遇触达' ||
+    item.name === '中秋团圆礼遇触达-1' ||
+    item.name === '端午重宾粽礼触达'
+  );
+}
+
+/** 沉默大会员唤醒：开始 → 选人 → 发短信 → 发优惠券 → 结束 */
+function isSilentWake8(item?: { id?: string; name?: string } | null) {
+  if (!item) return false;
+  return item.id === 'ACT202607' || item.name === '沉默大会员唤醒';
+}
+
+const FESTIVAL_SMS_A =
+  '【文旅惠】中秋快乐！团圆月饼礼盒限时满减，精选中秋伴手礼打开小程序立即选购。拒收请回复 R';
+const FESTIVAL_SMS_B =
+  '【文旅惠】中秋佳节至，会员专享月饼券已到账，到店/小程序核销享优惠。详情见活动页。拒收请回复 R';
+
+function festivalCare4DesignNodes() {
+  const rowA = 40;
+  const rowB = 440;
+  const spineCenterY = (rowA + 46 + rowB + 46) / 2;
+  const startY = spineCenterY - 36;
+  const pickY = spineCenterY - 46;
+  return [
+    { id: 'n1', name: '开始', type: '开始', config: '即时执行', x: 80, y: startY },
+    {
+      id: 'n2',
+      name: '选人',
+      type: '人群',
+      config: '目标人群：中秋意向客',
+      meta: { audienceSource: 'crowd', crowdName: '中秋意向客' },
+      x: 260,
+      y: pickY,
+    },
+    {
+      id: 'n3a',
+      name: '随机抽取',
+      type: '处理',
+      config: '按比例抽取 60%',
+      meta: { sampleMode: 'ratio', sampleRatio: '60' },
+      x: 460,
+      y: rowA,
+    },
+    {
+      id: 'n4a',
+      name: '发短信',
+      type: '触达',
+      config: FESTIVAL_SMS_A,
+      meta: {
+        smsChannel: 'normal',
+        smsFreqMode: 'slot',
+        smsFreqStart: '09:00',
+        smsFreqEnd: '21:00',
+        smsFreqAt: '10:00',
+        smsTemplateKey: 'A',
+        smsContent: FESTIVAL_SMS_A,
+        smsPublishAt: '2026-09-15 10:00:00',
+      },
+      x: 640,
+      y: rowA,
+    },
+    {
+      id: 'n5a',
+      name: '等待',
+      type: '等待',
+      config: '等待 3 天',
+      meta: { waitAmount: '3', waitUnit: 'day' },
+      x: 820,
+      y: rowA,
+    },
+    {
+      id: 'n5va',
+      name: '是否访问',
+      type: '判断',
+      config: '是否访问（浏览、活动访问）',
+      meta: { visitBehaviorActions: '浏览,活动访问' },
+      x: 1000,
+      y: rowA,
+    },
+    {
+      id: 'n6a',
+      name: '是否购买',
+      type: '判断',
+      config: '已购买 / 未购买',
+      meta: { purchaseScope: 'any' },
+      x: 1180,
+      y: rowA,
+    },
+    {
+      id: 'n7a',
+      name: '小程序发券',
+      type: '触达',
+      config: '发券·中秋满减券 ×1',
+      meta: { couponName: '中秋满减券', couponCount: '1' },
+      x: 1360,
+      y: rowA,
+    },
+    { id: 'n8a', name: '结束', type: '结束', config: '完成', x: 1360, y: rowA + 160 },
+    {
+      id: 'n3b',
+      name: '随机抽取',
+      type: '处理',
+      config: '按比例抽取 40%',
+      meta: { sampleMode: 'ratio', sampleRatio: '40' },
+      x: 460,
+      y: rowB,
+    },
+    {
+      id: 'n4b',
+      name: '发短信',
+      type: '触达',
+      config: FESTIVAL_SMS_B,
+      meta: {
+        smsChannel: 'normal',
+        smsFreqMode: 'slot',
+        smsFreqStart: '09:00',
+        smsFreqEnd: '21:00',
+        smsFreqAt: '10:00',
+        smsTemplateKey: 'B',
+        smsContent: FESTIVAL_SMS_B,
+        smsPublishAt: '2026-09-15 10:00:00',
+      },
+      x: 640,
+      y: rowB,
+    },
+    {
+      id: 'n5b',
+      name: '等待',
+      type: '等待',
+      config: '等待 3 天',
+      meta: { waitAmount: '3', waitUnit: 'day' },
+      x: 820,
+      y: rowB,
+    },
+    {
+      id: 'n5vb',
+      name: '是否访问',
+      type: '判断',
+      config: '是否访问（浏览、活动访问）',
+      meta: { visitBehaviorActions: '浏览,活动访问' },
+      x: 1000,
+      y: rowB,
+    },
+    {
+      id: 'n6b',
+      name: '是否购买',
+      type: '判断',
+      config: '已购买 / 未购买',
+      meta: { purchaseScope: 'any' },
+      x: 1180,
+      y: rowB,
+    },
+    {
+      id: 'n7b',
+      name: '小程序发券',
+      type: '触达',
+      config: '发券·中秋满减券 ×1',
+      meta: { couponName: '中秋满减券', couponCount: '1' },
+      x: 1360,
+      y: rowB,
+    },
+    { id: 'n8b', name: '结束', type: '结束', config: '完成', x: 1360, y: rowB + 160 },
+  ];
+}
+
+function festivalCare4DesignEdges() {
+  const link = (
+    from: string,
+    to: string,
+    extra?: { label?: string; sourceSide?: string; targetSide?: string },
+  ) => ({
+    id: `e_${from}_${to}${extra?.label ? `_${extra.label}` : ''}`,
+    source: from,
+    target: to,
+    sourceSide: extra?.sourceSide || 'right',
+    targetSide: extra?.targetSide || 'left',
+    ...(extra?.label ? { label: extra.label } : {}),
+  });
+  return [
+    link('n1', 'n2', { sourceSide: 'right', targetSide: 'left' }),
+    link('n2', 'n3a', { sourceSide: 'right', targetSide: 'left' }),
+    link('n2', 'n3b', { sourceSide: 'right', targetSide: 'left' }),
+    link('n3a', 'n4a'),
+    link('n4a', 'n5a'),
+    link('n5a', 'n5va'),
+    link('n5va', 'n6a'),
+    link('n6a', 'n7a', { label: '未购买' }),
+    link('n6a', 'n8a', { label: '已购买', sourceSide: 'bottom', targetSide: 'top' }),
+    link('n7a', 'n8a', { sourceSide: 'bottom', targetSide: 'top' }),
+    link('n3b', 'n4b'),
+    link('n4b', 'n5b'),
+    link('n5b', 'n5vb'),
+    link('n5vb', 'n6b'),
+    link('n6b', 'n7b', { label: '未购买' }),
+    link('n6b', 'n8b', { label: '已购买', sourceSide: 'bottom', targetSide: 'top' }),
+    link('n7b', 'n8b', { sourceSide: 'bottom', targetSide: 'top' }),
+  ];
+}
+
+function silentWake8DesignNodes() {
+  return [
+    { id: 'n1', name: '开始', type: '开始', config: '活动触发' },
+    { id: 'n2', name: '选人', type: '人群', config: '目标人群包 / 人群标签' },
+    { id: 'n3', name: '发短信', type: '触达', config: '沉默唤醒短信' },
+    { id: 'n4', name: '发优惠券', type: '触达', config: '唤醒满减券' },
+    { id: 'n5', name: '结束', type: '结束', config: '完成' },
+  ];
+}
+
+function resolveDesignNodes(item?: { id?: string; name?: string } | null) {
+  if (isFestivalCare4(item)) return festivalCare4DesignNodes();
+  if (isSilentWake8(item)) return silentWake8DesignNodes();
+  return [
+    { id: 'n1', name: '开始', type: '开始', config: '活动触发' },
+    { id: 'n2', name: '人群圈选', type: '人群', config: '静态人群 · 高价值客户' },
+    { id: 'n3', name: '合并去重', type: '处理', config: '按客户ID去重' },
+    { id: 'n4', name: '短信触达', type: '触达', config: '普通短信模板 A' },
+    { id: 'n5', name: '结束', type: '结束', config: '完成' },
+  ];
+}
+
+function resolveDesignEdges(item?: { id?: string; name?: string } | null) {
+  if (isFestivalCare4(item)) return festivalCare4DesignEdges();
+  return null;
+}
+
+function festivalCare4ReportNodes() {
+  const entered = 12840;
+  const branchA = Math.floor(entered * 0.6);
+  const branchB = entered - branchA;
+  const smsAOk = Math.floor(branchA * 0.94);
+  const smsBOk = Math.floor(branchB * 0.93);
+  const convertA = Math.floor(smsAOk * 0.28);
+  const convertB = Math.floor(smsBOk * 0.26);
+  const failA = smsAOk - convertA;
+  const failB = smsBOk - convertB;
+  const couponOk = Math.floor((failA + failB) * 0.92);
+  return [
+    { id: '1', nodeName: '开始', nodeType: '开始', entered: 0, success: 0, failed: 0, duration: '-' },
+    { id: '2', nodeName: '选人', nodeType: '人群', entered, success: entered, failed: 0, duration: '30s' },
+    {
+      id: '3',
+      nodeName: '发短信',
+      nodeType: '触达',
+      entered,
+      success: smsAOk + smsBOk,
+      failed: entered - smsAOk - smsBOk,
+      duration: '2m',
+    },
+    {
+      id: '4',
+      nodeName: '是否购买',
+      nodeType: '判断',
+      entered: smsAOk + smsBOk,
+      success: convertA + convertB,
+      failed: failA + failB,
+      duration: '3d',
+    },
+    {
+      id: '5',
+      nodeName: '小程序发券',
+      nodeType: '触达',
+      entered: failA + failB,
+      success: couponOk,
+      failed: failA + failB - couponOk,
+      duration: '1m',
+    },
+    {
+      id: '6',
+      nodeName: '结束',
+      nodeType: '结束',
+      entered: convertA + convertB + couponOk,
+      success: convertA + convertB + couponOk,
+      failed: 0,
+      duration: '1s',
+    },
+  ];
+}
+
+function festivalCare4ReportSummary() {
+  const nodes = festivalCare4ReportNodes();
+  const sms = nodes.find((n) => n.nodeName === '发短信')!;
+  const judge = nodes.find((n) => n.nodeName === '是否购买')!;
+  const coupon = nodes.find((n) => n.nodeName === '小程序发券')!;
+  const convertSuccess = judge.success;
+  const convertFail = judge.failed;
+  return {
+    entered: 12840,
+    /** 漏斗：触达成功 = 转换成功 + 转换失败 */
+    reachSuccess: convertSuccess + convertFail,
+    reachFail: sms.failed,
+    convertSuccess,
+    convertFail,
+    benefitIssued: coupon.success,
+    hasConvert: true,
+  };
+}
+
+function silentWake8ReportNodes() {
+  const entered = 9600;
+  const smsSuccess = Math.floor(entered * 0.9);
+  const smsFail = entered - smsSuccess;
+  const couponSuccess = Math.floor(smsSuccess * 0.92);
+  const couponFail = smsSuccess - couponSuccess;
+  return [
+    { id: '1', nodeName: '开始', nodeType: '开始', entered: 0, success: 0, failed: 0, duration: '-' },
+    { id: '2', nodeName: '选人', nodeType: '人群', entered, success: entered, failed: 0, duration: '30s' },
+    { id: '3', nodeName: '发短信', nodeType: '触达', entered, success: smsSuccess, failed: smsFail, duration: '2m' },
+    {
+      id: '4',
+      nodeName: '发优惠券',
+      nodeType: '触达',
+      entered: smsSuccess,
+      success: couponSuccess,
+      failed: couponFail,
+      duration: '1m',
+    },
+    {
+      id: '5',
+      nodeName: '结束',
+      nodeType: '结束',
+      entered: couponSuccess,
+      success: couponSuccess,
+      failed: 0,
+      duration: '1s',
+    },
+  ];
+}
+
+function silentWake8ReportSummary() {
+  const nodes = silentWake8ReportNodes();
+  const sms = nodes.find((n) => n.nodeName === '发短信')!;
+  const coupon = nodes.find((n) => n.nodeName === '发优惠券')!;
+  return {
+    entered: 9600,
+    reachSuccess: sms.success,
+    reachFail: sms.failed,
+    benefitIssued: coupon.success,
+    hasConvert: false,
+  };
+}
+
+function resolveReportNodes(item?: { id?: string; name?: string } | null) {
+  if (isFestivalCare4(item)) return festivalCare4ReportNodes();
+  if (isSilentWake8(item)) return silentWake8ReportNodes();
+  return [
+    { id: '1', nodeName: '开始', nodeType: '开始', entered: 0, success: 0, failed: 0, duration: '-' },
+    { id: '2', nodeName: '人群圈选', nodeType: '人群', entered: 12840, success: 12840, failed: 0, duration: '45s' },
+    { id: '3', nodeName: '行为触发', nodeType: '行为', entered: 4200, success: 4180, failed: 20, duration: '实时' },
+    { id: '4', nodeName: '小程序站内信', nodeType: '触达', entered: 4180, success: 3900, failed: 280, duration: '2m' },
+    { id: '5', nodeName: '发券', nodeType: '优惠', entered: 860, success: 860, failed: 0, duration: '30s' },
+    { id: '6', nodeName: '结束', nodeType: '结束', entered: 12600, success: 12600, failed: 0, duration: '1s' },
+  ];
+}
+
 let activities: ActivityRow[] = Array.from({ length: 16 }).map((_, i) => {
   const status = ACTIVITY_STATUSES[i % ACTIVITY_STATUSES.length];
   const creator = APPROVER_POOL[i % 3];
   const approver = APPROVER_POOL[(i + 1) % 3];
+  const createdAt = `2026-0${(i % 6) + 1}-${String(10 + (i % 15)).padStart(2, '0')} 10:00:00`;
+  const executed =
+    status === '进行中' || status === '已暂停' || status === '已结束'
+      ? `2026-0${(i % 6) + 1}-${String(12 + (i % 10)).padStart(2, '0')} ${String(9 + (i % 8)).padStart(2, '0')}:30:00`
+      : undefined;
   return {
     id: `ACT${202600 + i}`,
-    name: ['文旅新客召回', '会员日促销', '沉默客唤醒', '节日关怀触达', '高价值专属礼'][i % 5] + `-${i + 1}`,
+    name: ['乐和乐都亲子年卡召回', '国企优品会员日促销', '沉默大会员唤醒', '中秋团圆礼遇触达', '高价值客户专属礼'][i % 5],
     status,
     catalog: ['文旅营销', '业务目录', '未分类'][i % 3],
     creator,
-    createdAt: `2026-0${(i % 6) + 1}-${String(10 + (i % 15)).padStart(2, '0')} 10:00:00`,
+    createdAt,
+    executedAt: executed,
     periodic: i % 4 === 0,
     mine: creator === 'demo',
     approver: status === '待审批' && i % 7 === 1 ? 'demo' : approver,
-    canEdit: status !== '已结束',
-    canDelete: status !== '进行中',
+    canEdit: ['草稿', '已驳回', '已通过'].includes(status),
+    canDelete: !['进行中', '已暂停'].includes(status),
     pinned: i === 0,
   };
 });
@@ -68,11 +437,27 @@ let activities: ActivityRow[] = Array.from({ length: 16 }).map((_, i) => {
     approved.creator = 'demo';
     approved.mine = true;
   }
+  const silentWake8 = activities.find((a) => a.id === 'ACT202607' || a.name === '沉默大会员唤醒');
+  if (silentWake8) {
+    silentWake8.status = '已结束';
+    silentWake8.canEdit = false;
+    silentWake8.canDelete = true;
+  }
+  const pinnedAct = activities.find((a) => a.pinned) || activities.find((a) => a.id === 'ACT202600');
+  if (pinnedAct) {
+    pinnedAct.name = '中秋团圆礼遇触达-1';
+  }
+  /** 已结束活动必须有执行时间 */
+  activities.forEach((a) => {
+    if (a.status === '已结束' && !a.executedAt) {
+      a.executedAt = a.createdAt?.replace('10:00:00', '09:30:00') || '2026-07-08 10:00:00';
+    }
+  });
 })();
 
 let localTemplates = Array.from({ length: 10 }).map((_, i) => ({
   id: `TPL${100 + i}`,
-  name: ['新客欢迎流程', '复购激励', '生日关怀', '沉默召回'][i % 4] + `模板${i + 1}`,
+  name: ['亲子乐园欢迎流程', '游轮复购激励', '会员生日关怀', '沉默会员召回'][i % 4],
   catalog: ['文旅营销', '业务目录', '未分类'][i % 3],
   target: ['全渠道会员', '店铺会员', '潜客'][i % 3],
   category: ['召回', '促活', '关怀'][i % 3],
@@ -93,7 +478,7 @@ const activityExecRecords = Array.from({ length: 20 }).map((_, i) => {
   return {
     id: `AER${i + 1}`,
     activityId: `ACT${202600 + (i % 8)}`,
-    activityName: ['文旅新客召回', '会员日促销', '沉默客唤醒', '节日关怀触达'][i % 4] + `-${(i % 8) + 1}`,
+    activityName: ['乐和乐都亲子年卡召回', '国企优品会员日促销', '沉默大会员唤醒', '中秋团圆礼遇触达'][i % 4],
     periodic: i % 3 === 0,
     status,
     startAt: status === '待执行' ? '' : `2026-07-${day} ${hour}:05:00`,
@@ -137,13 +522,15 @@ export default {
       onlyMine,
       pendingApprove,
       currentUser = 'demo',
+      createdAtRange,
+      executedAtRange,
     } = req.query as Record<string, string>;
     let list = [...activities];
     if (catalog && catalog !== '所有' && catalog !== '全部') {
       list = list.filter((x) => x.catalog === catalog);
     }
     if (keyword) {
-      list = list.filter((x) => x.name.includes(keyword) || x.id.includes(keyword));
+      list = list.filter((x) => x.name.includes(keyword));
     }
     if (status && status !== '全部') list = list.filter((x) => x.status === status);
     if (creator) list = list.filter((x) => x.creator.includes(creator));
@@ -154,6 +541,16 @@ export default {
     if (pendingApprove === 'true') {
       list = list.filter((x) => x.status === '待审批' && x.approver === currentUser);
     }
+    const inRange = (value: string | undefined, rangeRaw?: string) => {
+      if (!rangeRaw) return true;
+      const range = String(rangeRaw).split(',');
+      if (!range[0] || !range[1]) return true;
+      const day = (value || '').slice(0, 10);
+      if (!day) return false;
+      return day >= range[0] && day <= range[1];
+    };
+    if (createdAtRange) list = list.filter((x) => inRange(x.createdAt, createdAtRange));
+    if (executedAtRange) list = list.filter((x) => inRange(x.executedAt, executedAtRange));
     res.json(pageSlice(list, current, pageSize));
   },
   'POST /api/crowd-marketing/activities': (req: Request, res: Response) => {
@@ -189,13 +586,8 @@ export default {
       success: true,
       data: {
         ...item,
-        nodes: [
-          { id: 'n1', name: '开始', type: '开始', config: '活动触发' },
-          { id: 'n2', name: '人群圈选', type: '人群', config: '静态人群 · 高价值客户' },
-          { id: 'n3', name: '合并去重', type: '处理', config: '按客户ID去重' },
-          { id: 'n4', name: '短信触达', type: '触达', config: '普通短信模板 A' },
-          { id: 'n5', name: '结束', type: '结束', config: '完成' },
-        ],
+        nodes: resolveDesignNodes(item),
+        edges: resolveDesignEdges(item) || undefined,
       },
     });
   },
@@ -213,7 +605,7 @@ export default {
       fail(res, '请先指定审批人');
       return;
     }
-    const updated = patchActivity(item.id, { status: '待审批' });
+    const updated = patchActivity(item.id, { status: '待审批', canEdit: false });
     res.json({ success: true, data: updated });
   },
   'POST /api/crowd-marketing/activities/:id/approve': (req: Request, res: Response) => {
@@ -231,7 +623,7 @@ export default {
       fail(res, '仅指定审批人可通过');
       return;
     }
-    const updated = patchActivity(item.id, { status: '已通过' });
+    const updated = patchActivity(item.id, { status: '已通过', canEdit: true, canDelete: true });
     appendAudit(currentUser, '审批通过', item.name);
     res.json({ success: true, data: updated });
   },
@@ -250,7 +642,7 @@ export default {
       fail(res, '仅指定审批人可驳回');
       return;
     }
-    const updated = patchActivity(item.id, { status: '已驳回' });
+    const updated = patchActivity(item.id, { status: '已驳回', canEdit: true, canDelete: true });
     appendAudit(currentUser, '审批驳回', item.name);
     res.json({ success: true, data: updated, remark: (req.body || {}).remark });
   },
@@ -261,7 +653,11 @@ export default {
       return;
     }
     if (item.status === '已暂停') {
-      const updated = patchActivity(item.id, { status: '进行中' });
+      const updated = patchActivity(item.id, {
+        status: '进行中',
+        canEdit: false,
+        canDelete: false,
+      });
       res.json({ success: true, data: updated });
       return;
     }
@@ -269,7 +665,13 @@ export default {
       fail(res, '须审批通过后才能正式执行');
       return;
     }
-    const updated = patchActivity(item.id, { status: '进行中' });
+    const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const updated = patchActivity(item.id, {
+      status: '进行中',
+      executedAt: item.executedAt || ts,
+      canEdit: false,
+      canDelete: false,
+    });
     res.json({ success: true, data: updated });
   },
   'POST /api/crowd-marketing/activities/:id/pause': (req: Request, res: Response) => {
@@ -282,7 +684,7 @@ export default {
       fail(res, '仅进行中的活动可暂停');
       return;
     }
-    const updated = patchActivity(item.id, { status: '已暂停' });
+    const updated = patchActivity(item.id, { status: '已暂停', canEdit: false, canDelete: false });
     res.json({ success: true, data: updated });
   },
   'POST /api/crowd-marketing/activities/:id/invalidate-approve': (req: Request, res: Response) => {
@@ -324,20 +726,18 @@ export default {
         execStatus: item.status === '进行中' ? '执行中' : '执行完成',
         startAt: '2026-07-20 10:00:00',
         endAt: '2026-07-20 12:30:00',
-        summary: {
-          entered: 12840,
-          reachSuccess: 10211,
-          reachFail: 329,
-          benefitIssued: 860,
-        },
-        nodes: [
-          { id: '1', nodeName: '开始', nodeType: '开始', entered: 12840, success: 12840, failed: 0, duration: '1s' },
-          { id: '2', nodeName: '人群圈选', nodeType: '人群', entered: 12840, success: 12600, failed: 240, duration: '45s' },
-          { id: '3', nodeName: '行为触发', nodeType: '行为', entered: 4200, success: 4180, failed: 20, duration: '实时' },
-          { id: '4', nodeName: '小程序站内信', nodeType: '触达', entered: 4180, success: 3900, failed: 280, duration: '2m' },
-          { id: '5', nodeName: '发券', nodeType: '优惠', entered: 860, success: 860, failed: 0, duration: '30s' },
-          { id: '6', nodeName: '结束', nodeType: '结束', entered: 12600, success: 12600, failed: 0, duration: '1s' },
-        ],
+        summary: isSilentWake8(item)
+          ? silentWake8ReportSummary()
+          : isFestivalCare4(item)
+            ? festivalCare4ReportSummary()
+            : {
+                entered: 12840,
+                reachSuccess: 10211,
+                reachFail: 329,
+                benefitIssued: 860,
+                hasConvert: false,
+              },
+        nodes: resolveReportNodes(item),
       },
     });
   },
@@ -351,7 +751,7 @@ export default {
       list = list.filter((x) => x.catalog === catalog);
     }
     if (keyword) {
-      list = list.filter((x) => x.name.includes(keyword) || x.id.includes(keyword));
+      list = list.filter((x) => x.name.includes(keyword));
     }
     if (periodic === '是') list = list.filter((x) => x.periodic);
     if (periodic === '否') list = list.filter((x) => !x.periodic);

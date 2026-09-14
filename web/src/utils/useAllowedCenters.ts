@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { CENTER_OPTIONS, type MarketingCenter } from '@/utils/centers';
 import { getCentersForUsername } from '@/utils/systemAdminStore';
 
-/** 当前登录用户角色可用的分中心选项 */
+/** 当前登录用户角色可用的平台选项 */
 export function useAllowedCenters() {
   const { initialState } = useModel('@@initialState');
   const username = initialState?.currentUser?.username as string | undefined;

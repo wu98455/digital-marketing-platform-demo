@@ -27,7 +27,7 @@ const CloudTemplatePage: React.FC = () => {
   }, [tab]);
 
   const columns: ProColumns<CloudItem>[] = [
-    { title: '模板名称/ID', dataIndex: 'keyword', hideInTable: true },
+    { title: '模板名称', dataIndex: 'keyword', hideInTable: true },
     {
       title: '模板类型',
       dataIndex: 'typeSearch',
@@ -45,7 +45,6 @@ const CloudTemplatePage: React.FC = () => {
       hideInTable: true,
       valueType: 'dateRange',
     },
-    { title: '模板ID', dataIndex: 'id', search: false, width: 100 },
     { title: '模板名称', dataIndex: 'name', search: false },
     { title: '模板类型', dataIndex: 'type', search: false, width: 110 },
     { title: '场景', dataIndex: 'scene', search: false, width: 100 },
@@ -100,7 +99,6 @@ const CloudTemplatePage: React.FC = () => {
                           </a>,
                         ]}
                       >
-                        <div>模板ID：{item.id}</div>
                         <div style={{ color: 'rgba(0,0,0,0.45)', marginTop: 8 }}>
                           按场景类型浏览云模板卡片
                         </div>

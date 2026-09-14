@@ -16,6 +16,30 @@ type CrowdMember = {
   source?: string;
 };
 
+function downloadCrowdMembersCsv(filename: string, rows: CrowdMember[]) {
+  const header = ['人员 OneID', '会员ID', '姓名', '手机', '平台', '来源'];
+  const lines = rows.map((r) =>
+    [
+      r.oneId,
+      r.memberId,
+      r.name,
+      r.phoneMasked,
+      (r.centers || []).join('、'),
+      r.source || '',
+    ]
+      .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+      .join(','),
+  );
+  const csv = `\uFEFF${[header.join(','), ...lines].join('\n')}`;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 const CrowdDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<any>();
@@ -56,6 +80,22 @@ const CrowdDetail: React.FC = () => {
               }}
             >
               复制
+            </Button>
+            <Button
+              onClick={() => {
+                const rows: CrowdMember[] = data?.members || [];
+                if (!rows.length) {
+                  message.warning('暂无人员可导出');
+                  return;
+                }
+                downloadCrowdMembersCsv(
+                  `目标人群-${data?.name || id || '未命名'}-${new Date().toISOString().slice(0, 10)}.csv`,
+                  rows,
+                );
+                message.success(`已导出 ${rows.length} 条`);
+              }}
+            >
+              导出
             </Button>
             <Button
               danger
@@ -109,7 +149,7 @@ const CrowdDetail: React.FC = () => {
                     { title: '姓名', dataIndex: 'name', width: 80 },
                     { title: '手机', dataIndex: 'phoneMasked', width: 120 },
                     {
-                      title: '分中心',
+                      title: '平台',
                       dataIndex: 'centers',
                       width: 160,
                       render: (_, row) => <CenterTags centers={row.centers || []} />,
@@ -122,7 +162,26 @@ const CrowdDetail: React.FC = () => {
             {
               key: 'cond',
               label: '人群条件',
-              children: <div style={{ padding: 8 }}>{data?.conditions || '--'}</div>,
+              children: (
+                <div style={{ padding: 8 }}>
+                  <div style={{ marginBottom: 12 }}>{data?.conditions || '--'}</div>
+                  {Array.isArray(data?.conditionGroups) &&
+                  data.conditionGroups.length &&
+                  data.conditionGroups[0]?.dim !== '（未配置）' ? (
+                    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                      {data.conditionGroups.map((g: { dim: string; summary: string }) => (
+                        <div key={g.dim} style={{ padding: '8px 12px', background: '#fafafa', borderRadius: 8 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{g.dim}</div>
+                          <div style={{ color: 'rgba(0,0,0,0.65)' }}>{g.summary}</div>
+                        </div>
+                      ))}
+                      <div style={{ color: 'rgba(0,0,0,0.45)', fontSize: 12 }}>
+                        组内条件为「且」，条件组之间为「或」
+                      </div>
+                    </Space>
+                  ) : null}
+                </div>
+              ),
             },
             {
               key: 'portrait',

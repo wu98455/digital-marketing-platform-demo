@@ -18,6 +18,23 @@ type TagMember = {
   taggedAt: string;
 };
 
+function downloadTagMembersCsv(filename: string, rows: TagMember[]) {
+  const header = ['人员 OneID', '姓名', '手机', '平台', '来源', '打标时间'];
+  const lines = rows.map((r) =>
+    [r.oneId, r.name, r.phoneMasked, (r.centers || []).join('、'), r.source || '', r.taggedAt || '']
+      .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+      .join(','),
+  );
+  const csv = `\uFEFF${[header.join(','), ...lines].join('\n')}`;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 const TagDetailPage: React.FC = () => {
   const params = useParams<{ group?: string; tag?: string }>();
   const group = params.group ? decodeURIComponent(params.group) : '';
@@ -99,7 +116,7 @@ const TagDetailPage: React.FC = () => {
       { title: '姓名', dataIndex: 'name', hideInTable: true },
       { title: '手机号', dataIndex: 'phone', hideInTable: true },
       {
-        title: '分中心',
+        title: '平台',
         dataIndex: 'centerSearch',
         hideInTable: true,
         valueType: 'select',
@@ -114,7 +131,7 @@ const TagDetailPage: React.FC = () => {
       { title: '姓名', dataIndex: 'name', search: false, width: 90 },
       { title: '手机', dataIndex: 'phoneMasked', search: false, width: 120 },
       {
-        title: '分中心',
+        title: '平台',
         dataIndex: 'centers',
         search: false,
         width: 180,
@@ -144,6 +161,21 @@ const TagDetailPage: React.FC = () => {
             </Button>
             <Button onClick={runAgain}>重新打标</Button>
             <Button
+              onClick={() => {
+                if (!members.length) {
+                  message.warning('暂无人员可导出');
+                  return;
+                }
+                downloadTagMembersCsv(
+                  `标签人群-${tag || '未命名'}-${new Date().toISOString().slice(0, 10)}.csv`,
+                  members,
+                );
+                message.success(`已导出 ${members.length} 条`);
+              }}
+            >
+              导出
+            </Button>
+            <Button
               danger
               onClick={() => {
                 Modal.confirm({
@@ -169,7 +201,7 @@ const TagDetailPage: React.FC = () => {
           </ProDescriptions.Item>
           <ProDescriptions.Item label="分类">{group}</ProDescriptions.Item>
           <ProDescriptions.Item label="覆盖人数">{meta.count ?? members.length}</ProDescriptions.Item>
-          <ProDescriptions.Item label="分中心">
+          <ProDescriptions.Item label="平台">
             <CenterTags centers={meta.centers || []} />
           </ProDescriptions.Item>
           <ProDescriptions.Item label="创建人">{meta.creator || '—'}</ProDescriptions.Item>

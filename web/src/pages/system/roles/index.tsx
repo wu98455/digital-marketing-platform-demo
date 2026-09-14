@@ -126,7 +126,7 @@ const SystemRolesPage: React.FC = () => {
       fieldProps: { placeholder: '名称或说明' },
     },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'center',
       hideInTable: true,
       valueType: 'select',
@@ -146,7 +146,7 @@ const SystemRolesPage: React.FC = () => {
       render: (_, row) => row.menus?.length || 0,
     },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centerNames',
       search: false,
       ellipsis: true,
@@ -266,7 +266,7 @@ const SystemRolesPage: React.FC = () => {
         onFinish={async (values) => {
           const { menus, operations } = checkedKeysToRole(checkedKeys);
           if (!centers.length) {
-            message.error('请至少选择一个分中心（数据权限）');
+            message.error('请至少选择一个平台（数据权限）');
             return false;
           }
           const payload = { ...values, menus, operations, centers, actor };
@@ -298,9 +298,9 @@ const SystemRolesPage: React.FC = () => {
         <ProFormText name="name" label="角色名称" rules={[{ required: true }]} />
         <ProFormTextArea name="description" label="说明" fieldProps={{ rows: 2 }} />
         <Form.Item
-          label="数据权限 · 分中心"
+          label="数据权限 · 平台"
           required
-          extra="控制可查看/选用的源数据范围；业务单据上的分中心选项也来自此处。"
+          extra="控制可查看/选用的源数据范围；业务单据上的平台选项也来自此处。"
         >
           <Checkbox.Group
             options={CENTER_OPTIONS}

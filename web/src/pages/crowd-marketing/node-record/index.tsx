@@ -58,7 +58,7 @@ const ActivityExecRecordPage: React.FC = () => {
       valueEnum: { 全部: { text: '全部' }, 是: { text: '是' }, 否: { text: '否' } },
     },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centerSearch',
       hideInTable: true,
       valueType: 'select',
@@ -104,7 +104,7 @@ const ActivityExecRecordPage: React.FC = () => {
       render: (_, row) => <Tag color={statusColor[row.status] || 'default'}>{row.status}</Tag>,
     },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centers',
       search: false,
       width: 180,

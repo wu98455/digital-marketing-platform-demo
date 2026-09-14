@@ -43,7 +43,7 @@ const PRODUCT_SEED_COUNT = 20;
 const seedTagValues = (id: string): string => {
   const n = Number(String(id).replace(/\D/g, '') || 0);
   const i = Math.max(n - 1, 0);
-  return i % 3 === 0 ? '热销,推荐' : '--';
+  return i % 3 === 0 ? '热销爆款,亲子家庭' : '--';
 };
 
 const ProductTaggingPage: React.FC = () => {
@@ -114,10 +114,9 @@ const ProductTaggingPage: React.FC = () => {
         不限: { text: '不限' },
         惠游重庆: { text: '惠游重庆' },
         国企优品: { text: '国企优品' },
-        测试平台: { text: '测试平台' },
+        文旅惠: { text: '文旅惠' },
       },
     },
-    { title: '店铺', dataIndex: 'storeSearch', hideInTable: true },
     { title: '商品标题', dataIndex: 'productTitle', hideInTable: true },
     {
       title: '商品状态',
@@ -130,7 +129,7 @@ const ProductTaggingPage: React.FC = () => {
       },
     },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centerSearch',
       hideInTable: true,
       valueType: 'select',
@@ -159,7 +158,6 @@ const ProductTaggingPage: React.FC = () => {
     { title: '商品名称', dataIndex: 'name', search: false },
     { title: 'SKU', dataIndex: 'sku', search: false },
     { title: '平台', dataIndex: 'platform', search: false },
-    { title: '店铺', dataIndex: 'store', search: false },
     {
       title: '状态',
       dataIndex: 'status',
@@ -172,7 +170,7 @@ const ProductTaggingPage: React.FC = () => {
     { title: '类目', dataIndex: 'category', search: false },
     { title: '价格', dataIndex: 'price', search: false },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centers',
       search: false,
       width: 180,

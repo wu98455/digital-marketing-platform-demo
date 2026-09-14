@@ -1,65 +1,71 @@
-import { PageContainer, ProCard, StatisticCard } from '@ant-design/pro-components';
-import { history, request, useModel } from '@umijs/max';
+import { PageContainer } from '@ant-design/pro-components';
+import { history, request } from '@umijs/max';
 import {
-  Button,
   Card,
   Col,
-  Progress,
   Row,
   Select,
   Space,
   Table,
+  Tooltip,
   Typography,
   message,
 } from 'antd';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import CenterTags from '@/components/CenterTags';
-import { DEMO_SMS_UNIT_COST } from '@/utils/centers';
+import { QuestionCircleOutlined } from '@ant-design/icons';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type {
+  AssetOverviewRow,
+  ChannelUsage,
+  MarketingOverviewMetrics,
+  TopActivityRow,
+} from '@/utils/analyticsOverview';
+import { listPagination } from '@/utils/listSearch';
 import { useAllowedCenters } from '@/utils/useAllowedCenters';
+import './Welcome.less';
 
 type Overview = {
-  kpi: {
-    activeOneId: number;
-    highValue: number;
-    reached: number;
-    reachRate: number;
-    estimatedCost: number;
-    deltas?: Record<string, number>;
+  updatedAt?: string;
+  marketingOverview: MarketingOverviewMetrics;
+  activityEntryCounts: {
+    designing: number;
+    pendingApprove: number;
+    running: number;
+    finished: number;
   };
-  valueLayers: { name: string; count: number }[];
-  opportunities: {
-    name: string;
-    centers: string[];
-    oneIdCount: number;
-    estimatedCost: number;
-  }[];
-  funnel: { name: string; count: number }[];
-  trend: { date: string; browse: number; cart: number; share: number; order: number }[];
-  centerCompare: { center: string; highValue: number; activeOneId: number }[];
-  recentActivities: {
-    id: string;
-    name: string;
-    centers: string[];
-    entered: number;
-    success: number;
-    failed: number;
-  }[];
-  costBreakdown: { channel: string; amount: number }[];
+  channelUsage: ChannelUsage;
+  topActivities: TopActivityRow[];
+  assetOverview: AssetOverviewRow[];
 };
 
 const RANGE_OPTIONS = [
+  { label: '近3天', value: '3d' },
   { label: '近7天', value: '7d' },
   { label: '近30天', value: '30d' },
-  { label: '近90天', value: '90d' },
 ];
+
+const tip = (text: string) => (
+  <Tooltip title={text}>
+    <QuestionCircleOutlined style={{ marginLeft: 4, color: 'rgba(0,0,0,0.45)' }} />
+  </Tooltip>
+);
+
+const money = (n?: number) =>
+  (n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const AnalyticsPage: React.FC = () => {
   const { options: centerOptions, centers: allowed } = useAllowedCenters();
-  const { initialState } = useModel('@@initialState');
   const [centerFilter, setCenterFilter] = useState<string[]>([]);
-  const [range, setRange] = useState('30d');
+  const [salesRange, setSalesRange] = useState('3d');
+  const [topRange, setTopRange] = useState('3d');
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(false);
+  const [marketingLoading, setMarketingLoading] = useState(false);
+  const [actPage, setActPage] = useState({ current: 1, pageSize: listPagination.defaultPageSize });
+  const salesRangeRef = useRef(salesRange);
+
+  useEffect(() => {
+    salesRangeRef.current = salesRange;
+  }, [salesRange]);
 
   useEffect(() => {
     if (!centerFilter.length && allowed.length) {
@@ -67,7 +73,10 @@ const AnalyticsPage: React.FC = () => {
     }
   }, [allowed, centerFilter.length]);
 
-  const load = useCallback(async () => {
+  const centersParam = (centerFilter.length ? centerFilter : allowed).join(',');
+
+  /** 平台 / 营销活动时间：整页刷新 */
+  const loadPage = useCallback(async () => {
     if (!allowed.length) {
       setData(null);
       return;
@@ -76,313 +85,381 @@ const AnalyticsPage: React.FC = () => {
     try {
       const res = await request<{ data: Overview }>('/api/analytics/overview', {
         params: {
-          centers: (centerFilter.length ? centerFilter : allowed).join(','),
-          range,
+          centers: centersParam,
+          salesRange: salesRangeRef.current,
+          topRange,
         },
       });
       setData(res.data);
+      setActPage((p) => ({ ...p, current: 1 }));
     } catch {
-      message.error('加载经营分析失败');
+      message.error('加载首页数据失败');
     } finally {
       setLoading(false);
     }
-  }, [allowed, centerFilter, range]);
+  }, [allowed, centersParam, topRange]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadPage();
+  }, [loadPage]);
 
-  const maxFunnel = useMemo(
-    () => Math.max(...(data?.funnel.map((f) => f.count) || [1]), 1),
-    [data],
-  );
+  /** 营销总览近 N 天：只更新本板块 */
+  useEffect(() => {
+    if (!allowed.length || !data) return;
+    let cancelled = false;
+    (async () => {
+      setMarketingLoading(true);
+      try {
+        const res = await request<{ data: Overview }>('/api/analytics/overview', {
+          params: {
+            centers: centersParam,
+            salesRange,
+            topRange,
+          },
+        });
+        if (cancelled) return;
+        setData((prev) =>
+          prev
+            ? {
+                ...prev,
+                marketingOverview: res.data.marketingOverview,
+                updatedAt: res.data.updatedAt,
+              }
+            : res.data,
+        );
+      } catch {
+        if (!cancelled) message.error('更新营销总览失败');
+      } finally {
+        if (!cancelled) setMarketingLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // 仅在 salesRange 变化时更新营销总览；首屏由 loadPage 带入，此处用 data 判空跳过首帧
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [salesRange]);
+
+  const marketing = data?.marketingOverview;
+  const channel = data?.channelUsage;
+
+  const assetTotal = (() => {
+    const rows = data?.assetOverview || [];
+    return {
+      center: '合计',
+      potential: rows.reduce((s, r) => s + r.potential, 0),
+      active: rows.reduce((s, r) => s + r.active, 0),
+      silent: rows.reduce((s, r) => s + r.silent, 0),
+      churned: rows.reduce((s, r) => s + r.churned, 0),
+      total: rows.reduce((s, r) => s + r.total, 0),
+    };
+  })();
+
+  const goActivityList = (status?: string) => {
+    const q = status ? `?status=${encodeURIComponent(status)}` : '';
+    history.push(`/crowd-marketing/activity${q}`);
+  };
 
   if (!allowed.length) {
     return (
       <PageContainer title={false}>
         <Card>
-          <Typography.Title level={4}>经营分析（二期）</Typography.Title>
+          <Typography.Title level={4}>首页</Typography.Title>
           <Typography.Paragraph type="secondary">
-            当前账号角色未配置分中心数据权限，请联系管理员在「系统管理 · 角色权限」中勾选分中心。
+            当前账号角色未配置平台数据权限，请联系管理员在「系统管理 · 角色权限」中勾选平台。
           </Typography.Paragraph>
         </Card>
       </PageContainer>
     );
   }
 
-  const kpi = data?.kpi;
+  const entry = data?.activityEntryCounts;
+  const entryItems = [
+    { key: 'designing', label: '设计中', count: entry?.designing, status: '草稿' },
+    { key: 'pending', label: '待审批', count: entry?.pendingApprove, status: '待审批' },
+    { key: 'running', label: '执行中', count: entry?.running, status: '进行中' },
+    { key: 'done', label: '执行完成', count: entry?.finished, status: '已结束' },
+  ];
 
   return (
-    <PageContainer title={false}>
-      <Card style={{ marginBottom: 16 }} loading={loading && !data}>
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'space-between',
-            gap: 12,
-            alignItems: 'flex-start',
-            marginBottom: 12,
-          }}
-        >
-          <div>
-            <Typography.Title level={4} style={{ marginTop: 0, marginBottom: 4 }}>
-              经营分析（二期）
-            </Typography.Title>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              当前账号：{initialState?.currentUser?.name || '--'} · 按分中心与时间范围查看价值人群、行为与触达成本
-            </Typography.Text>
+    <PageContainer title={false} className="analytics-page">
+      <div className="analytics-filters">
+        <Space wrap size={8}>
+          <span className="analytics-filter-label">平台</span>
+          <Select
+            mode="multiple"
+            allowClear
+            style={{ minWidth: 280 }}
+            options={centerOptions}
+            value={centerFilter}
+            onChange={setCenterFilter}
+            placeholder="选择平台"
+          />
+        </Space>
+      </div>
+
+      <Card
+        className="analytics-section"
+        loading={loading || marketingLoading}
+        title="营销总览"
+        extra={
+          <Select
+            style={{ width: 120 }}
+            options={RANGE_OPTIONS}
+            value={salesRange}
+            onChange={setSalesRange}
+          />
+        }
+      >
+        <span className="sales-updated">数据更新至：{data?.updatedAt || '--'}</span>
+        <div className="sales-grid sales-grid-4">
+          <div className="sales-metric is-hero">
+            <div className="sales-metric-label">
+              营销总金额
+              {tip('所选时间范围内，营销活动归因产生的成交总金额（演示）')}
+            </div>
+            <div className="sales-metric-value">¥ {money(marketing?.marketingAmount)}</div>
           </div>
-          <Space wrap>
-            <span>分中心</span>
-            <Select
-              mode="multiple"
-              allowClear
-              style={{ minWidth: 260 }}
-              options={centerOptions}
-              value={centerFilter}
-              onChange={setCenterFilter}
-              placeholder="选择分中心"
-            />
-            <span>时间</span>
-            <Select style={{ width: 120 }} options={RANGE_OPTIONS} value={range} onChange={setRange} />
-            <Button type="primary" onClick={load} loading={loading}>
-              刷新
-            </Button>
-          </Space>
+          <div className="sales-metric">
+            <div className="sales-metric-label">
+              营销次数
+              {tip('所选时间范围内活动正式执行的次数（演示）')}
+            </div>
+            <div className="sales-metric-value">
+              {(marketing?.marketingTimes ?? 0).toLocaleString()}
+              <span className="metric-unit">次</span>
+            </div>
+          </div>
+          <div className="sales-metric">
+            <div className="sales-metric-label">
+              转化人数
+              {tip('因营销触达产生成交的去重人数（演示）')}
+            </div>
+            <div className="sales-metric-value">
+              {(marketing?.convertUsers ?? 0).toLocaleString()}
+              <span className="metric-unit">人</span>
+            </div>
+          </div>
+          <div className="sales-metric">
+            <div className="sales-metric-label">
+              转化率
+              {tip('转化人数 ÷ 营销触达人数，衡量触达转化效率（演示）')}
+            </div>
+            <div className="sales-metric-value is-accent">
+              {(marketing?.convertRate ?? 0).toFixed(2)}%
+            </div>
+          </div>
         </div>
       </Card>
 
-      <ProCard ghost gutter={16} style={{ marginBottom: 16 }}>
-        <StatisticCard
-          statistic={{
-            title: '活跃 OneID 数',
-            value: kpi?.activeOneId ?? 0,
-            description:
-              kpi?.deltas?.activeOneId != null ? (
-                <Typography.Text type={kpi.deltas.activeOneId >= 0 ? 'success' : 'danger'}>
-                  环比 {kpi.deltas.activeOneId >= 0 ? '↑' : '↓'}
-                  {Math.abs(kpi.deltas.activeOneId)}%
-                </Typography.Text>
-              ) : undefined,
-          }}
-        />
-        <StatisticCard statistic={{ title: '高价值人数', value: kpi?.highValue ?? 0 }} />
-        <StatisticCard statistic={{ title: '近周期触达人数', value: kpi?.reached ?? 0 }} />
-        <StatisticCard
-          statistic={{
-            title: '触达成功率',
-            value: kpi?.reachRate ?? 0,
-            suffix: '%',
-          }}
-        />
-        <StatisticCard
-          statistic={{
-            title: '预估可投放成本',
-            value: kpi?.estimatedCost ?? 0,
-            prefix: '¥',
-            precision: 2,
-            description: (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                高价值未触达 × ¥{DEMO_SMS_UNIT_COST}/条
-              </Typography.Text>
-            ),
-          }}
-        />
-      </ProCard>
-
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col xs={24} lg={10}>
-          <Card title="价值人群分层" loading={loading}>
-            {(data?.valueLayers || []).map((layer) => (
-              <div key={layer.name} style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>{layer.name}</span>
-                  <span>{layer.count.toLocaleString()} OneID</span>
-                </div>
-                <Progress
-                  percent={Math.round(
-                    (layer.count /
-                      Math.max(...(data?.valueLayers.map((x) => x.count) || [1]), 1)) *
-                      100,
-                  )}
-                  showInfo={false}
-                />
-              </div>
-            ))}
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              演示口径：高=近90天成交≥2；中=有成交；其余按行为/首单 Mock。
-            </Typography.Text>
-          </Card>
-        </Col>
-        <Col xs={24} lg={14}>
-          <Card title="高价值机会榜" loading={loading}>
-            <Table
-              size="small"
-              rowKey="name"
-              pagination={false}
-              dataSource={data?.opportunities || []}
-              columns={[
-                { title: '人群/标签', dataIndex: 'name', ellipsis: true },
-                {
-                  title: '分中心',
-                  dataIndex: 'centers',
-                  width: 160,
-                  render: (v: string[]) => <CenterTags centers={v} max={2} />,
-                },
-                { title: 'OneID 人数', dataIndex: 'oneIdCount', width: 100 },
-                {
-                  title: '预估成本',
-                  dataIndex: 'estimatedCost',
-                  width: 100,
-                  render: (v: number) => `¥${Number(v).toFixed(2)}`,
-                },
-                {
-                  title: '操作',
-                  width: 140,
-                  render: () => (
-                    <Space>
-                      <a onClick={() => history.push('/crowd/create')}>去圈人</a>
-                      <a onClick={() => history.push('/crowd-marketing/activity')}>去开活动</a>
-                    </Space>
-                  ),
-                },
-              ]}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col xs={24} lg={12}>
-          <Card title="用户行为漏斗" loading={loading}>
-            {(data?.funnel || []).map((step, idx) => {
-              const prev = idx === 0 ? step.count : data!.funnel[idx - 1].count;
-              const rate = prev ? Math.round((step.count / prev) * 1000) / 10 : 0;
-              return (
-                <div key={step.name} style={{ marginBottom: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>
-                      {step.name}
-                      {idx > 0 ? (
-                        <Typography.Text type="secondary">（转化 {rate}%）</Typography.Text>
-                      ) : null}
-                    </span>
-                    <span>{step.count.toLocaleString()}</span>
+      <Row gutter={[16, 16]} className="analytics-pair" align="stretch">
+        <Col xs={24} lg={14} className="analytics-pair-col">
+          <Card title="营销活动入口" loading={loading}>
+            <div className="entry-grid">
+              {entryItems.map((item) => (
+                <div
+                  key={item.key}
+                  className="entry-tile"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => goActivityList(item.status)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') goActivityList(item.status);
+                  }}
+                >
+                  <div className="entry-tile-label">{item.label}</div>
+                  <div className="entry-tile-value">
+                    {item.count ?? 0}
+                    <span className="entry-tile-suffix">个</span>
                   </div>
-                  <Progress percent={Math.round((step.count / maxFunnel) * 100)} showInfo={false} />
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </Card>
         </Col>
-        <Col xs={24} lg={12}>
-          <Card title="分中心对比 · 高价值 / 活跃 OneID" loading={loading}>
-            <Table
-              size="small"
-              pagination={false}
-              rowKey="center"
-              dataSource={data?.centerCompare || []}
-              columns={[
-                { title: '分中心', dataIndex: 'center' },
-                { title: '高价值', dataIndex: 'highValue' },
-                { title: '活跃 OneID', dataIndex: 'activeOneId' },
-              ]}
-            />
+        <Col xs={24} lg={10} className="analytics-pair-col">
+          <Card title="通道用量" loading={loading}>
+            <div className="channel-usage-grid">
+              <div className="channel-panel">
+                <div className="channel-panel-meta">短信发送</div>
+                <div className="channel-panel-value">
+                  {(channel?.smsSent ?? 0).toLocaleString()}
+                  <span className="entry-tile-suffix">条</span>
+                </div>
+              </div>
+              <div className="channel-panel">
+                <div className="channel-panel-meta">企微推送</div>
+                <div className="channel-panel-value">
+                  {(channel?.wecomPushes ?? 0).toLocaleString()}
+                  <span className="entry-tile-suffix">次</span>
+                </div>
+              </div>
+            </div>
           </Card>
         </Col>
       </Row>
 
-      <Card title="行为趋势（浏览 / 加购 / 分享 / 下单）" loading={loading} style={{ marginBottom: 16 }}>
+      <Card
+        className="analytics-section"
+        title="营销活动"
+        loading={loading}
+        extra={
+          <Select
+            style={{ width: 120 }}
+            options={RANGE_OPTIONS}
+            value={topRange}
+            onChange={setTopRange}
+          />
+        }
+      >
         <Table
-          size="small"
-          pagination={false}
-          rowKey="date"
-          scroll={{ x: 560 }}
-          dataSource={data?.trend || []}
+          className="analytics-table"
+          size="middle"
+          rowKey="id"
+          scroll={{ x: 1100 }}
+          dataSource={data?.topActivities || []}
+          pagination={{
+            ...listPagination,
+            current: actPage.current,
+            pageSize: actPage.pageSize,
+            onChange: (current, pageSize) => setActPage({ current, pageSize }),
+            showTotal: (total) => `共 ${total} 条`,
+          }}
           columns={[
-            { title: '日期', dataIndex: 'date', width: 110 },
-            { title: '浏览', dataIndex: 'browse' },
-            { title: '加购', dataIndex: 'cart' },
-            { title: '分享', dataIndex: 'share' },
-            { title: '下单', dataIndex: 'order' },
+            {
+              title: '序号',
+              width: 64,
+              align: 'center',
+              render: (_: unknown, __: TopActivityRow, index: number) =>
+                (actPage.current - 1) * actPage.pageSize + index + 1,
+            },
+            {
+              title: '活动名称',
+              dataIndex: 'name',
+              ellipsis: true,
+              width: 180,
+              render: (_, row) => (
+                <a onClick={() => history.push(`/crowd-marketing/activity/report/${row.id}`)}>
+                  {row.name}
+                </a>
+              ),
+            },
+            {
+              title: '营销触达人数',
+              dataIndex: 'reachUsers',
+              width: 118,
+              align: 'right',
+              render: (v: number) => v.toLocaleString(),
+            },
+            {
+              title: '访问人数',
+              dataIndex: 'visitUsers',
+              width: 96,
+              align: 'right',
+              render: (v: number) => v.toLocaleString(),
+            },
+            {
+              title: '加购人数',
+              dataIndex: 'cartUsers',
+              width: 96,
+              align: 'right',
+              render: (v: number) => v.toLocaleString(),
+            },
+            {
+              title: '下单人数',
+              dataIndex: 'orderUsers',
+              width: 96,
+              align: 'right',
+              render: (v: number) => v.toLocaleString(),
+            },
+            {
+              title: '营销方式',
+              dataIndex: 'channel',
+              width: 140,
+              ellipsis: true,
+            },
+            {
+              title: '活动时间',
+              dataIndex: 'activityTime',
+              width: 210,
+              className: 'col-activity-time',
+            },
           ]}
-          locale={{ emptyText: '暂无趋势数据' }}
         />
       </Card>
 
-      <Row gutter={16}>
-        <Col xs={24} lg={14}>
-          <Card
-            title="近期活动效果"
-            loading={loading}
-            extra={
-              <a onClick={() => history.push('/crowd-marketing/node-record')}>
-                查看全部执行记录
-              </a>
-            }
-          >
-            <Table
-              size="small"
-              rowKey="id"
-              pagination={false}
-              dataSource={data?.recentActivities || []}
-              onRow={(row) => ({
-                onClick: () =>
-                  history.push(`/crowd-marketing/activity/report/${row.id || 'ACT202603'}`),
-                style: { cursor: 'pointer' },
-              })}
-              columns={[
-                { title: '活动', dataIndex: 'name', ellipsis: true },
-                {
-                  title: '分中心',
-                  dataIndex: 'centers',
-                  width: 140,
-                  render: (v: string[]) => <CenterTags centers={v} max={2} />,
-                },
-                { title: '进入', dataIndex: 'entered', width: 70 },
-                { title: '成功', dataIndex: 'success', width: 70 },
-                { title: '失败', dataIndex: 'failed', width: 70 },
-                {
-                  title: '成功率',
-                  width: 80,
-                  render: (_, row) =>
-                    row.entered
-                      ? `${Math.round((row.success / row.entered) * 1000) / 10}%`
-                      : '--',
-                },
-              ]}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} lg={10}>
-          <Card title="渠道成本构成（演示）" loading={loading}>
-            <Table
-              size="small"
-              pagination={false}
-              rowKey="channel"
-              dataSource={data?.costBreakdown || []}
-              columns={[
-                { title: '渠道', dataIndex: 'channel' },
-                {
-                  title: '金额',
-                  dataIndex: 'amount',
-                  render: (v: number) => `¥${Number(v).toFixed(2)}`,
-                },
-              ]}
-              summary={(pageData) => {
-                const total = pageData.reduce((s, r) => s + Number(r.amount || 0), 0);
-                return (
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell index={0}>合计</Table.Summary.Cell>
-                    <Table.Summary.Cell index={1}>¥{total.toFixed(2)}</Table.Summary.Cell>
-                  </Table.Summary.Row>
-                );
-              }}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <Card className="analytics-section" title="客户资产概览" loading={loading}>
+        <Table
+          className="analytics-table"
+          size="middle"
+          rowKey="center"
+          pagination={false}
+          dataSource={[...(data?.assetOverview || []), assetTotal]}
+          columns={[
+            { title: '平台', dataIndex: 'center', width: 160 },
+            {
+              title: (
+                <span>
+                  潜客
+                  {tip('尚未成交或处于早期意向的客户（演示）')}
+                </span>
+              ),
+              dataIndex: 'potential',
+              align: 'right',
+              render: (v: number) => v.toLocaleString(),
+            },
+            {
+              title: (
+                <span>
+                  活跃客户
+                  {tip('近周期有登录或下单（演示）')}
+                </span>
+              ),
+              dataIndex: 'active',
+              align: 'right',
+              render: (v: number, row) =>
+                row.center === '合计' ? (
+                  v.toLocaleString()
+                ) : (
+                  <a onClick={() => history.push('/platform-members')}>{v.toLocaleString()}</a>
+                ),
+            },
+            {
+              title: (
+                <span>
+                  沉默客户
+                  {tip('曾活跃、近周期无互动（演示）')}
+                </span>
+              ),
+              dataIndex: 'silent',
+              align: 'right',
+              render: (v: number) => v.toLocaleString(),
+            },
+            {
+              title: (
+                <span>
+                  流失客户
+                  {tip('长期无互动（演示）')}
+                </span>
+              ),
+              dataIndex: 'churned',
+              align: 'right',
+              render: (v: number) => v.toLocaleString(),
+            },
+            {
+              title: (
+                <span>
+                  全体客户
+                  {tip('四态合计')}
+                </span>
+              ),
+              dataIndex: 'total',
+              align: 'right',
+              render: (v: number) => v.toLocaleString(),
+            },
+          ]}
+        />
+      </Card>
     </PageContainer>
   );
 };

@@ -31,7 +31,7 @@ const TaggedImportPage: React.FC = () => {
       valueType: 'select',
       valueEnum: {
         全部平台: { text: '全部平台' },
-        测试平台: { text: '测试平台' },
+        文旅惠: { text: '文旅惠' },
         惠游重庆: { text: '惠游重庆' },
       },
     },
@@ -109,9 +109,11 @@ const TaggedImportPage: React.FC = () => {
           name="group"
           label="分组"
           options={[
-            { label: '客户价值', value: '客户价值' },
-            { label: '生命周期', value: '生命周期' },
-            { label: 'RFM', value: 'RFM' },
+            { label: '行为类', value: '行为类' },
+            { label: '消费类', value: '消费类' },
+            { label: '活动类', value: '活动类' },
+            { label: '节日', value: '节日' },
+            { label: '基础属性', value: '基础属性' },
           ]}
           rules={[{ required: true }]}
         />

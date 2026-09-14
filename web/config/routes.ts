@@ -1,5 +1,5 @@
 /**
- * 数字营销平台 · 菜单：经营分析 → 数据打标 → 目标人群 → 营销管理 → 系统管理
+ * 数字营销平台 · 菜单：首页 → 平台会员 → 数据打标 → 目标人群 → 营销管理 → 系统管理
  */
 export default [
   {
@@ -23,6 +23,25 @@ export default [
   /** 旧欢迎页路径兼容跳转 */
   { path: '/welcome', redirect: '/analytics' },
   {
+    path: '/platform-members',
+    name: 'platform-members',
+    icon: 'team',
+    access: 'canPlatformMembers',
+    hideChildrenInMenu: true,
+    routes: [
+      {
+        path: '/platform-members',
+        component: './tag-center/customer',
+      },
+      {
+        path: '/platform-members/view/:id',
+        name: 'platform-member-view',
+        component: './customer-asset/customer-list/view',
+        hideInMenu: true,
+      },
+    ],
+  },
+  {
     path: '/help',
     name: 'help',
     component: './help',
@@ -42,22 +61,6 @@ export default [
         path: '/tag-center/list',
         name: 'tag-center-list',
         component: './tag-center/list',
-      },
-      {
-        path: '/tag-center/customer',
-        name: 'tag-center-customer',
-        component: './tag-center/customer',
-      },
-      {
-        path: '/tag-center/store',
-        name: 'tag-center-store',
-        component: './tag-center/store',
-      },
-      {
-        path: '/tag-center/store/view/:id',
-        name: 'tag-center-store-view',
-        component: './tag-center/store/view',
-        hideInMenu: true,
       },
       {
         path: '/tag-center/product',
@@ -99,12 +102,9 @@ export default [
         component: './tag-center/detail',
         hideInMenu: true,
       },
-      {
-        path: '/tag-center/customer/view/:id',
-        name: 'customer-view',
-        component: './customer-asset/customer-list/view',
-        hideInMenu: true,
-      },
+      /** 旧「人员数据」入口兼容 */
+      { path: '/tag-center/customer', redirect: '/platform-members' },
+      { path: '/tag-center/customer/view/:id', redirect: '/platform-members/view/:id' },
       { path: '/tag-center/rules', redirect: '/tag-center/list', hideInMenu: true },
       { path: '/tag-center/rules/create', redirect: '/tag-center/list', hideInMenu: true },
       { path: '/tag-center/rules/edit/:id', redirect: '/tag-center/list', hideInMenu: true },

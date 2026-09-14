@@ -54,6 +54,12 @@ body,
   filter: invert(80%);
 }
 
+/* 主题配置改为从用户菜单进入，隐藏右下角悬浮入口 */
+.ant-pro-setting-drawer-handle,
+[class*='-setting-drawer-handle'] {
+  display: none !important;
+}
+
 .ant-layout {
   min-height: 100vh;
 }

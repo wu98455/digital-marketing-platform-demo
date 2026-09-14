@@ -14,9 +14,11 @@ export {
 export type { CatalogKind } from './TagCatalogContext';
 export {
   CUSTOMER_TAG_CATALOG,
-  STORE_TAG_CATALOG,
+  CUSTOMER_TAG_DESCRIPTIONS,
   PRODUCT_TAG_CATALOG,
   CAMPAIGN_TAG_CATALOG,
+  SUPPLIER_TAG_CATALOG,
+  catalogTagOptions,
 } from './catalogs';
 export type { TagGroup, TagItem } from './types';
 export {

@@ -47,7 +47,7 @@ const treeData = [
     title: '全部',
     key: '全部',
     children: [
-      { title: '测试平台', key: '测试平台' },
+      { title: '文旅惠', key: '文旅惠' },
       { title: '惠游重庆', key: '惠游重庆' },
       { title: '国企优品', key: '国企优品' },
       { title: '重庆文旅集团大会员', key: '重庆文旅集团大会员' },
@@ -70,7 +70,7 @@ const ShopTagPage: React.FC = () => {
   const [currentRow, setCurrentRow] = useState<TagItem>();
   const [templateKey, setTemplateKey] = useState<string>('mother');
 
-  const groupOptions = ['测试平台', '惠游重庆', '国企优品', '重庆文旅集团大会员'];
+  const groupOptions = ['文旅惠', '惠游重庆', '国企优品', '重庆文旅集团大会员'];
 
   const columns: ProColumns<TagItem>[] = [
     { title: '标签ID', dataIndex: 'tagId', hideInTable: true },
@@ -342,7 +342,7 @@ const ShopTagPage: React.FC = () => {
           label="平台"
           options={[
             { label: '全部平台', value: '全部平台' },
-            { label: '测试平台', value: '测试平台' },
+            { label: '文旅惠', value: '文旅惠' },
             { label: '惠游重庆', value: '惠游重庆' },
           ]}
         />
@@ -463,12 +463,12 @@ const ShopTagPage: React.FC = () => {
           name="platform"
           label="平台"
           options={[
-            { label: '测试平台', value: '测试平台' },
+            { label: '文旅惠', value: '文旅惠' },
             { label: '惠游重庆', value: '惠游重庆' },
             { label: '国企优品', value: '国企优品' },
             { label: '重庆文旅集团大会员', value: '重庆文旅集团大会员' },
           ]}
-          initialValue="测试平台"
+          initialValue="文旅惠"
           rules={[{ required: true, message: '请选择平台' }]}
         />
         <div style={{ marginBottom: 8 }}>

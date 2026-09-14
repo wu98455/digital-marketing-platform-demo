@@ -7,7 +7,7 @@ type Props = {
   max?: number;
 };
 
-/** 列表「分中心」列：多值 Tag 展示 */
+/** 列表「平台」列：多值 Tag 展示 */
 const CenterTags: React.FC<Props> = ({ centers, max = 4 }) => {
   if (!centers?.length) {
     return <span style={{ color: 'rgba(0,0,0,0.45)' }}>--</span>;

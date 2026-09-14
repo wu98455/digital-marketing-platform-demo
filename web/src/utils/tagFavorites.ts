@@ -52,3 +52,23 @@ export function getRecentTagKeys(username?: string): string[] {
     return [];
   }
 }
+
+/** 标签改名/改分类后，同步收藏与最近常用中的 identity */
+export function remapTagIdentity(
+  from: { group: string; tag: string },
+  to: { group: string; tag: string },
+  username?: string,
+) {
+  const user = username || getDemoUsername();
+  const fromKey = tagIdentity(from.group, from.tag);
+  const toKey = tagIdentity(to.group, to.tag);
+  if (fromKey === toKey) return;
+
+  const fav = getFavoriteTagKeys(user).map((k) => (k === fromKey ? toKey : k));
+  localStorage.setItem(favKey(user), JSON.stringify(Array.from(new Set(fav))));
+
+  const recent = getRecentTagKeys(user)
+    .map((k) => (k === fromKey ? toKey : k))
+    .filter((k, i, arr) => arr.indexOf(k) === i);
+  localStorage.setItem(recentKey(user), JSON.stringify(recent));
+}

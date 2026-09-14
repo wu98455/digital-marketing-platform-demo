@@ -3,16 +3,14 @@ import {
   CAMPAIGN_TAG_CATALOG,
   CUSTOMER_TAG_CATALOG,
   PRODUCT_TAG_CATALOG,
-  STORE_TAG_CATALOG,
 } from './catalogs';
 import type { TagGroup, TagItem } from './types';
 import { tagKey } from './types';
 
-export type CatalogKind = 'customer' | 'store' | 'product' | 'campaign';
+export type CatalogKind = 'customer' | 'product' | 'campaign';
 
 const INITIAL: Record<CatalogKind, TagGroup[]> = {
   customer: CUSTOMER_TAG_CATALOG.map((g) => ({ group: g.group, tags: [...g.tags] })),
-  store: STORE_TAG_CATALOG.map((g) => ({ group: g.group, tags: [...g.tags] })),
   product: PRODUCT_TAG_CATALOG.map((g) => ({ group: g.group, tags: [...g.tags] })),
   campaign: CAMPAIGN_TAG_CATALOG.map((g) => ({ group: g.group, tags: [...g.tags] })),
 };

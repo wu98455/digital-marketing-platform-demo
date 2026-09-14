@@ -19,7 +19,6 @@ type TemplateItem = {
   id: string;
   name: string;
   catalog: string;
-  target: string;
   category: string;
   creator: string;
   createdAt: string;
@@ -50,7 +49,7 @@ const LocalTemplatePage: React.FC = () => {
   };
 
   const columns: ProColumns<TemplateItem>[] = [
-    { title: '模板名称/ID', dataIndex: 'keyword', hideInTable: true },
+    { title: '模板名称', dataIndex: 'keyword', hideInTable: true },
     {
       title: '分类',
       dataIndex: 'catalogSearch',
@@ -71,13 +70,12 @@ const LocalTemplatePage: React.FC = () => {
       valueEnum: { 全部: { text: '全部' }, 是: { text: '是' }, 否: { text: '否' } },
     },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centerSearch',
       hideInTable: true,
       valueType: 'select',
       valueEnum: Object.fromEntries(MARKETING_CENTERS.map((c) => [c, { text: c }])),
     },
-    { title: '模板ID', dataIndex: 'id', search: false, width: 100 },
     {
       title: '模板名称',
       dataIndex: 'name',
@@ -90,10 +88,9 @@ const LocalTemplatePage: React.FC = () => {
         </a>
       ),
     },
-    { title: '营销对象', dataIndex: 'target', search: false, width: 120 },
     { title: '分类', dataIndex: 'catalog', search: false, width: 100 },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centers',
       search: false,
       width: 180,
@@ -131,7 +128,6 @@ const LocalTemplatePage: React.FC = () => {
                 data: {
                   name: `${row.name}-副本`,
                   catalog: row.catalog,
-                  target: row.target,
                   category: row.category,
                   periodic: row.periodic,
                 },
@@ -247,14 +243,12 @@ const LocalTemplatePage: React.FC = () => {
           formMode === 'edit' && editing
             ? {
                 name: editing.name,
-                target: editing.target,
                 catalog: editing.catalog,
                 category: editing.category,
                 periodic: !!editing.periodic,
                 remark: '',
               }
             : {
-                target: '全渠道会员',
                 catalog: '未分类',
                 periodic: false,
               }
@@ -275,16 +269,6 @@ const LocalTemplatePage: React.FC = () => {
         }}
       >
         <ProFormText name="name" label="名称" rules={[{ required: true }]} />
-        <ProFormSelect
-          name="target"
-          label="营销对象"
-          options={[
-            { label: '全渠道会员', value: '全渠道会员' },
-            { label: '店铺会员', value: '店铺会员' },
-            { label: '潜客', value: '潜客' },
-          ]}
-          rules={[{ required: true }]}
-        />
         <ProFormSelect
           name="catalog"
           label="分类"

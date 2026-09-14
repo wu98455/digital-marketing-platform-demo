@@ -16,6 +16,7 @@ export default function access(
     return {
       canAdmin: false,
       canWelcome: false,
+      canPlatformMembers: false,
       canTagCenter: false,
       canCrowd: false,
       canMarketing: false,
@@ -49,6 +50,7 @@ export default function access(
       (currentUser.access === 'admin'
         ? ([
             'welcome',
+            'platform-members',
             'tag-center',
             'crowd',
             'crowd-marketing',
@@ -62,7 +64,7 @@ export default function access(
             'system-audit',
             'system-org',
           ] as MenuAccessKey[])
-        : ['welcome']),
+        : ['welcome', 'platform-members']),
   );
   const ops = new Set<OpPermission>(
     role?.operations ||
@@ -84,6 +86,7 @@ export default function access(
   return {
     canAdmin: user?.roleId === 'admin' || currentUser.access === 'admin',
     canWelcome: hasMenu('welcome'),
+    canPlatformMembers: hasMenu('platform-members'),
     canTagCenter: hasMenu('tag-center'),
     canCrowd: hasMenu('crowd'),
     canMarketing: hasMenu('crowd-marketing'),

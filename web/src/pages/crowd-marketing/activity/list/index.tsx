@@ -7,8 +7,9 @@ import {
   ProFormText,
   ProTable,
 } from '@ant-design/pro-components';
-import { history, request, useAccess, useModel } from '@umijs/max';
+import { history, request, useAccess, useModel, useSearchParams } from '@umijs/max';
 import { Button, Checkbox, Dropdown, Modal, Space, Tag, message } from 'antd';
+import { DownOutlined } from '@ant-design/icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import CenterTags from '@/components/CenterTags';
 import { MARKETING_CENTERS } from '@/utils/centers';
@@ -16,8 +17,18 @@ import { listPagination, listSearchProps } from '@/utils/listSearch';
 import { useAllowedCenters } from '@/utils/useAllowedCenters';
 
 /** 仅正式执行过的活动展示「执行结果」入口 */
-const canViewExecResult = (status?: string) =>
+const isExecutedStatus = (status?: string) =>
   ['进行中', '已暂停', '已结束'].includes(status || '');
+
+const canViewExecResult = isExecutedStatus;
+
+/** 列表可改基本信息：未执行；正式执行后不可编辑 */
+const canEditByStatus = (status?: string) =>
+  ['草稿', '已驳回', '已通过'].includes(status || '');
+
+/** 进行中 / 已暂停不可删；其余可删 */
+const canDeleteByStatus = (status?: string) =>
+  !['进行中', '已暂停'].includes(status || '');
 
 /** 浅底色 Tag + 左侧实心圆点（对齐设计稿「校验状态」样式） */
 const ACTIVITY_STATUS_TAG: Record<string, string> = {
@@ -55,6 +66,7 @@ type ActivityItem = {
   catalog: string;
   creator: string;
   createdAt: string;
+  executedAt?: string;
   periodic?: boolean;
   approver?: string;
   canEdit?: boolean;
@@ -73,14 +85,31 @@ type ApproverProfile = {
 const DEFAULT_CATALOGS = ['文旅营销', '业务目录', '未分类'];
 const PROTECTED = new Set(['未分类']);
 
+const ACTIVITY_STATUS_FILTER = [
+  '全部',
+  '草稿',
+  '待审批',
+  '已通过',
+  '已驳回',
+  '进行中',
+  '已暂停',
+  '已结束',
+] as const;
+
 const ActivityList: React.FC = () => {
   const { initialState } = useModel('@@initialState');
   const access = useAccess();
+  const [searchParams] = useSearchParams();
   const CURRENT_USER = String(initialState?.currentUser?.username || 'demo');
   const canExecute = !!access.canActivityExecute;
   const { options: centerOptions } = useAllowedCenters();
   const actionRef = useRef<ActionType | null>(null);
   const createFormRef = useRef<ProFormInstance>(undefined);
+  const searchFormRef = useRef<ProFormInstance>(undefined);
+  const statusFromQuery = searchParams.get('status') || '';
+  const initialStatus = (ACTIVITY_STATUS_FILTER as readonly string[]).includes(statusFromQuery)
+    ? statusFromQuery
+    : '全部';
   const [catalogs, setCatalogs] = useState<string[]>(DEFAULT_CATALOGS);
   const [createOpen, setCreateOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
@@ -155,8 +184,8 @@ const ActivityList: React.FC = () => {
   };
 
   const openEditActivity = (row: ActivityItem) => {
-    if (row.canEdit === false) {
-      message.warning('当前活动不可编辑（演示）');
+    if (!canEditByStatus(row.status)) {
+      message.warning('当前状态不可编辑');
       return;
     }
     setFormMode('edit');
@@ -278,13 +307,13 @@ const ActivityList: React.FC = () => {
   };
 
   const columns: ProColumns<ActivityItem>[] = [
-    { title: '活动名称/ID', dataIndex: 'keyword', hideInTable: true },
+    { title: '活动名称', dataIndex: 'keyword', hideInTable: true },
     {
       title: '状态',
       dataIndex: 'statusSearch',
       hideInTable: true,
       valueType: 'select',
-      initialValue: '全部',
+      initialValue: initialStatus,
       valueEnum: {
         全部: { text: '全部' },
         草稿: { text: '草稿' },
@@ -309,7 +338,7 @@ const ActivityList: React.FC = () => {
     },
     { title: '创建人', dataIndex: 'creatorSearch', hideInTable: true },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centerSearch',
       hideInTable: true,
       valueType: 'select',
@@ -329,7 +358,12 @@ const ActivityList: React.FC = () => {
       hideInTable: true,
       valueType: 'dateRange',
     },
-    { title: '活动ID', dataIndex: 'id', search: false, width: 110 },
+    {
+      title: '执行时间',
+      dataIndex: 'executedAtRange',
+      hideInTable: true,
+      valueType: 'dateRange',
+    },
     {
       title: '活动名称',
       dataIndex: 'name',
@@ -346,7 +380,7 @@ const ActivityList: React.FC = () => {
       ),
     },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centers',
       search: false,
       width: 180,
@@ -375,9 +409,21 @@ const ActivityList: React.FC = () => {
     { title: '创建人', dataIndex: 'creator', search: false, width: 100 },
     { title: '创建时间', dataIndex: 'createdAt', search: false, width: 170 },
     {
+      title: '执行时间',
+      dataIndex: 'executedAt',
+      search: false,
+      width: 170,
+      render: (_, row) => {
+        if (row.status === '已结束') {
+          return row.executedAt || row.createdAt || '—';
+        }
+        return row.executedAt || '—';
+      },
+    },
+    {
       title: '操作',
       valueType: 'option',
-      width: 280,
+      width: 170,
       search: false,
       fixed: 'right',
       render: (_, row) => {
@@ -386,7 +432,41 @@ const ActivityList: React.FC = () => {
           row.status === '待审批' && String(row.approver || '') === CURRENT_USER;
         const canFormalRun = canExecute && row.status === '已通过';
         const canResume = canExecute && row.status === '已暂停';
-        const canPause = row.status === '进行中';
+        const canPause = canExecute && row.status === '进行中';
+        const showEdit = canEditByStatus(row.status);
+        const showExecResult = canViewExecResult(row.status);
+        const showDelete = canDeleteByStatus(row.status);
+        const moreItems = [
+          {
+            key: 'pin',
+            label: row.pinned ? '取消置顶' : '置顶',
+            onClick: () =>
+              message.success(row.pinned ? '已取消置顶（演示）' : '已置顶（演示）'),
+          },
+          {
+            key: 'copy',
+            label: '复制',
+            onClick: () => message.success('已复制（演示）'),
+          },
+          ...(showDelete
+            ? [
+                {
+                  key: 'delete',
+                  label: '删除',
+                  danger: true,
+                  onClick: () => {
+                    Modal.confirm({
+                      title: '确认删除该活动？',
+                      onOk: () => {
+                        message.success('已删除（演示）');
+                        actionRef.current?.reload();
+                      },
+                    });
+                  },
+                },
+              ]
+            : []),
+        ];
         return (
           <div className="table-op-row">
             {canDecide ? (
@@ -400,55 +480,13 @@ const ActivityList: React.FC = () => {
             ) : null}
             {canResume ? <a onClick={() => handleFormalRun(row)}>恢复执行</a> : null}
             {canPause ? <a onClick={() => handlePause(row)}>暂停</a> : null}
-            <a
-              className={row.canEdit === false ? 'disabled' : undefined}
-              onClick={() => openEditActivity(row)}
-            >
-              编辑
-            </a>
-            {canViewExecResult(row.status) ? (
+            {showEdit ? <a onClick={() => openEditActivity(row)}>编辑</a> : null}
+            {showExecResult ? (
               <a onClick={() => history.push(`/crowd-marketing/activity/report/${row.id}`)}>
                 执行结果
               </a>
             ) : null}
-            <Dropdown
-              menu={{
-                items: [
-                  {
-                    key: 'pin',
-                    label: row.pinned ? '取消置顶' : '置顶',
-                    onClick: () =>
-                      message.success(row.pinned ? '已取消置顶（演示）' : '已置顶（演示）'),
-                  },
-                  {
-                    key: 'copy',
-                    label: '复制',
-                    onClick: () => message.success('已复制（演示）'),
-                  },
-                  {
-                    key: 'export',
-                    label: '导出',
-                    onClick: () => message.success('已导出（演示）'),
-                  },
-                  {
-                    key: 'delete',
-                    label: '删除',
-                    danger: true,
-                    disabled: row.canDelete === false,
-                    onClick: () => {
-                      if (row.canDelete === false) return;
-                      Modal.confirm({
-                        title: '确认删除该活动？',
-                        onOk: () => {
-                          message.success('已删除（演示）');
-                          actionRef.current?.reload();
-                        },
-                      });
-                    },
-                  },
-                ],
-              }}
-            >
+            <Dropdown menu={{ items: moreItems }}>
               <a>更多</a>
             </Dropdown>
           </div>
@@ -462,40 +500,52 @@ const ActivityList: React.FC = () => {
   return (
     <PageContainer title={false}>
       <ProTable<ActivityItem>
+        key={`activity-list-${initialStatus}`}
         headerTitle="营销活动"
         actionRef={actionRef}
+        formRef={searchFormRef}
         rowKey="id"
         columns={columns}
         search={listSearchProps}
+        form={{ initialValues: { statusSearch: initialStatus } }}
         pagination={listPagination}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1400 }}
         rowSelection={{ onChange: (_, rows) => setSelectedRows(rows) }}
         toolBarRender={() => [
           <Button key="create" type="primary" onClick={openCreateActivity}>
             新建活动
           </Button>,
-          <Button
-            key="batchDel"
+          <Dropdown
+            key="batchMore"
             disabled={!selectedRows.length}
-            onClick={() =>
-              Modal.confirm({
-                title: `确认删除已选 ${selectedRows.length} 个活动？`,
-                onOk: () => {
-                  message.success('已批量删除（演示）');
-                  actionRef.current?.reload();
+            menu={{
+              items: [
+                {
+                  key: 'batchExport',
+                  label: '批量导出',
+                  onClick: () => message.success('已批量导出（演示）'),
                 },
-              })
-            }
+                {
+                  key: 'batchDel',
+                  label: '批量删除',
+                  danger: true,
+                  onClick: () => {
+                    Modal.confirm({
+                      title: `确认删除已选 ${selectedRows.length} 个活动？`,
+                      onOk: () => {
+                        message.success('已批量删除（演示）');
+                        actionRef.current?.reload();
+                      },
+                    });
+                  },
+                },
+              ],
+            }}
           >
-            批量删除
-          </Button>,
-          <Button
-            key="batchExport"
-            disabled={!selectedRows.length}
-            onClick={() => message.success('已批量导出（演示）')}
-          >
-            批量导出
-          </Button>,
+            <Button disabled={!selectedRows.length}>
+              更多操作 <DownOutlined />
+            </Button>
+          </Dropdown>,
           <Checkbox
             key="periodic"
             checked={onlyPeriodic}
@@ -563,13 +613,11 @@ const ActivityList: React.FC = () => {
             ? {
                 name: editingActivity.name,
                 category: editingActivity.catalog,
-                target: '全渠道会员',
                 approver: editingActivity.approver,
                 periodic: !!editingActivity.periodic,
               }
             : {
                 category: '未分类',
-                target: '全渠道会员',
                 approver: defaultApprover,
                 periodic: false,
                 template: 'blank',
@@ -614,15 +662,15 @@ const ActivityList: React.FC = () => {
         <ProFormText name="name" label="活动名称" rules={[{ required: true }]} />
         <ProFormSelect
           name="centers"
-          label="分中心"
+          label="平台"
           options={centerOptions}
-          rules={[{ required: true, message: '请选择分中心' }]}
+          rules={[{ required: true, message: '请选择平台' }]}
           fieldProps={{
             mode: 'multiple',
-            placeholder: centerOptions.length ? '请选择分中心' : '当前角色未配置分中心',
+            placeholder: centerOptions.length ? '请选择平台' : '当前角色未配置平台',
             disabled: !centerOptions.length,
           }}
-          extra="选项来自角色「数据权限 · 分中心」"
+          extra="选项来自角色「数据权限 · 平台」"
         />
         {formMode === 'create' ? (
           <ProFormSelect
@@ -675,14 +723,6 @@ const ActivityList: React.FC = () => {
               </a>
             </Space>
           }
-        />
-        <ProFormSelect
-          name="target"
-          label="营销对象"
-          options={[
-            { label: '全渠道会员', value: '全渠道会员' },
-            { label: '店铺会员', value: '店铺会员' },
-          ]}
         />
         <ProFormSwitch name="periodic" label="周期性活动" />
         <ProFormSelect

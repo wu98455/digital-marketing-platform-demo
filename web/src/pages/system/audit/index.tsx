@@ -8,7 +8,7 @@ import { listPagination, listSearchProps } from '@/utils/listSearch';
 import type { AuditLog } from '@/utils/systemAdminStore';
 
 function downloadCsv(filename: string, rows: AuditLog[]) {
-  const header = ['时间', '操作人', '动作', '分中心', '详情'];
+  const header = ['时间', '操作人', '动作', '平台', '详情'];
   const lines = rows.map((r) =>
     [r.at, r.actor, r.action, (r.centers || []).join('、'), r.detail || '']
       .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
@@ -102,7 +102,7 @@ const SystemAuditPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centers',
       search: false,
       width: '18%',

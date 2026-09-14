@@ -4,49 +4,22 @@ import {
   StepsForm,
 } from '@ant-design/pro-components';
 import { history, request, useSearchParams } from '@umijs/max';
-import { Button, Card, Form, Input, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Card, Form, Input, Space, message } from 'antd';
 import React, { useEffect, useState } from 'react';
 import {
   MultiLibraryTagPicker,
-  colorForGroup,
-  useTagCatalog,
   type LibraryTagItem,
 } from '@/components/Tagging';
 import TitleWithTip from '@/components/TitleWithTip';
 import TagRuleConditionsEditor from '@/pages/tag-center/components/TagRuleConditionsEditor';
-import type { PreviewSample, TagRuleConditions } from '@/utils/tagRuleTypes';
-import { emptyTagRuleConditions, samplesFromConditions } from '@/utils/tagRuleTypes';
+import type { TagRuleConditions } from '@/utils/tagRuleTypes';
+import { emptyTagRuleConditions } from '@/utils/tagRuleTypes';
 import { pageHeader } from '@/utils/pageHeader';
 import { useAllowedCenters } from '@/utils/useAllowedCenters';
-
-function downloadCsv(filename: string, rows: PreviewSample[]) {
-  const header = ['OneID', '会员ID', '姓名', '手机', '分中心', '来源'];
-  const lines = [
-    header.join(','),
-    ...rows.map((r) =>
-      [
-        r.oneId || '',
-        r.memberId,
-        r.name,
-        r.phoneMasked,
-        (r.centers || []).join('|'),
-        `"${(r.source || '').replace(/"/g, '""')}"`,
-      ].join(','),
-    ),
-  ];
-  const blob = new Blob([`\ufeff${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 const CrowdCreatePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const copyName = searchParams.get('copyName') || '';
-  const { getCatalog } = useTagCatalog();
   const { options: centerOptions } = useAllowedCenters();
 
   const [name, setName] = useState(copyName);
@@ -59,8 +32,6 @@ const CrowdCreatePage: React.FC = () => {
   const [selectedTags, setSelectedTags] = useState<LibraryTagItem[]>([]);
   const [tagError, setTagError] = useState<string>();
   const [conditions, setConditions] = useState<TagRuleConditions>(emptyTagRuleConditions());
-  const [previewCount, setPreviewCount] = useState<number>();
-  const [samples, setSamples] = useState<PreviewSample[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -92,20 +63,6 @@ const CrowdCreatePage: React.FC = () => {
     return dup;
   };
 
-  const runPreview = () => {
-    const base = samplesFromConditions(conditions, centers);
-    const withTagHint = base.map((row, i) => ({
-      ...row,
-      source:
-        selectedTags.length > 0
-          ? `标签：${selectedTags[i % selectedTags.length].sourceLabel}/${selectedTags[i % selectedTags.length].tag}`
-          : row.source || '维度筛选',
-    }));
-    setSamples(withTagHint);
-    const boost = selectedTags.length * 80;
-    setPreviewCount(Math.max(withTagHint.length * 40 + boost, 120 + boost));
-  };
-
   const handleFinish = async () => {
     if (!name.trim()) {
       message.warning('请填写人群名称');
@@ -116,7 +73,7 @@ const CrowdCreatePage: React.FC = () => {
       return false;
     }
     if (!centers.length) {
-      message.warning('请选择分中心');
+      message.warning('请选择平台');
       return false;
     }
     if (!selectedTags.length) {
@@ -136,15 +93,15 @@ const CrowdCreatePage: React.FC = () => {
             centers,
             tags: selectedTags,
             conditions,
-            count: previewCount,
+            startCalc: true,
           },
         },
       );
       if (res?.success === false) {
-        message.error(res.errorMessage || '创建失败');
+        message.error(res.errorMessage || '提交失败');
         return false;
       }
-      message.success(`已创建人群「${name.trim()}」`);
+      message.success('已提交计算，请在列表查看进度');
       history.push('/crowd');
       return true;
     } finally {
@@ -188,13 +145,13 @@ const CrowdCreatePage: React.FC = () => {
             return (
               <Space>
                 {step > 0 ? <Button onClick={() => onPre?.()}>上一步</Button> : null}
-                {step < 2 ? (
+                {step < 1 ? (
                   <Button type="primary" onClick={() => props.onSubmit?.()}>
                     下一步
                   </Button>
                 ) : (
                   <Button type="primary" loading={submitting} onClick={() => onSubmit?.()}>
-                    确认创建
+                    提交计算
                   </Button>
                 )}
                 <Button onClick={() => history.push('/crowd')}>取消</Button>
@@ -206,7 +163,7 @@ const CrowdCreatePage: React.FC = () => {
         <StepsForm.StepForm
           name="basic"
           title="基本信息"
-          stepProps={{ description: '名称与分中心' }}
+          stepProps={{ description: '名称与平台' }}
           initialValues={{
             name: copyName || '',
             persistType: '正式人群',
@@ -224,7 +181,7 @@ const CrowdCreatePage: React.FC = () => {
             }
             const nextCenters = (values.centers as string[]) || centers;
             if (!nextCenters?.length) {
-              message.warning('请选择分中心');
+              message.warning('请选择平台');
               return false;
             }
             setName(nextName);
@@ -255,18 +212,18 @@ const CrowdCreatePage: React.FC = () => {
               </Form.Item>
               <ProFormSelect
                 name="centers"
-                label="分中心"
+                label="平台"
                 options={centerOptions}
-                rules={[{ required: true, message: '请选择分中心' }]}
+                rules={[{ required: true, message: '请选择平台' }]}
                 width="md"
                 fieldProps={{
                   mode: 'multiple',
-                  placeholder: centerOptions.length ? '请选择分中心' : '当前角色未配置分中心权限',
+                  placeholder: centerOptions.length ? '请选择平台' : '当前角色未配置平台权限',
                   value: centers,
                   onChange: (v: string[]) => setCenters(v || []),
                   disabled: !centerOptions.length,
                 }}
-                extra="选项来自角色「数据权限 · 分中心」"
+                extra="选项来自角色「数据权限 · 平台」"
               />
               <ProFormSelect
                 name="persistType"
@@ -297,7 +254,6 @@ const CrowdCreatePage: React.FC = () => {
               return false;
             }
             setTagError(undefined);
-            runPreview();
             return true;
           }}
         >
@@ -334,74 +290,13 @@ const CrowdCreatePage: React.FC = () => {
               title={
                 <TitleWithTip
                   title="维度筛选（可选）"
-                  tip="在已选标签基础上叠加会员/订单/行为等维度条件；组内且、组间或。可不填。"
+                  tip="七个维度 Tab；每维可添加多组条件（组内且、组间或）；维度之间关系可在 Tab 右侧切换。可不填。"
                 />
               }
             >
               <TagRuleConditionsEditor value={conditions} onChange={setConditions} />
             </Card>
           </div>
-        </StepsForm.StepForm>
-
-        <StepsForm.StepForm name="preview" title="预览确认" stepProps={{ description: '确认创建' }}>
-          <Typography.Paragraph>
-            人群：
-            <Typography.Text strong style={{ marginInline: 8 }}>
-              {name}
-            </Typography.Text>
-            类型：
-            <Typography.Text strong>{persistType}</Typography.Text>
-            <span style={{ marginLeft: 12 }}>
-              分中心：
-              <Typography.Text strong>{centers.join('、') || '--'}</Typography.Text>
-            </span>
-            <Button type="link" onClick={runPreview}>
-              刷新预估
-            </Button>
-            <Button
-              type="link"
-              disabled={!samples.length}
-              onClick={() => downloadCsv(`${name || '人群'}-预览.csv`, samples)}
-            >
-              导出
-            </Button>
-          </Typography.Paragraph>
-          <Typography.Paragraph>
-            已选标签：
-            <Space size={[4, 4]} wrap style={{ marginLeft: 8 }}>
-              {selectedTags.map((t) => (
-                <Tag
-                  key={`${t.source}::${t.group}::${t.tag}`}
-                  color={colorForGroup(t.group, getCatalog(t.kind))}
-                >
-                  {t.sourceLabel}/{t.tag}
-                </Tag>
-              ))}
-            </Space>
-          </Typography.Paragraph>
-          <Typography.Paragraph>
-            预估人数：<Typography.Text strong>{previewCount ?? '—'}</Typography.Text>
-          </Typography.Paragraph>
-          <Table
-            size="small"
-            pagination={false}
-            rowKey="id"
-            dataSource={samples}
-            columns={[
-              { title: '人员 OneID', dataIndex: 'oneId', width: 160 },
-              { title: '会员ID', dataIndex: 'memberId', width: 100 },
-              { title: '姓名', dataIndex: 'name', width: 80 },
-              { title: '手机', dataIndex: 'phoneMasked', width: 120 },
-              {
-                title: '分中心',
-                dataIndex: 'centers',
-                width: 120,
-                render: (v: string[]) => (v || []).join('、') || '--',
-              },
-              { title: '来源', dataIndex: 'source', ellipsis: true },
-            ]}
-            locale={{ emptyText: '进入本步时已预估；也可点「刷新预估」' }}
-          />
         </StepsForm.StepForm>
       </StepsForm>
     </PageContainer>

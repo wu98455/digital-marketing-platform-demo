@@ -26,6 +26,33 @@ function pageSlice<T>(list: T[], current = 1, pageSize = 10) {
 
 export default {
   'GET /api/tag-center/person-tags': (_req: Request, res: Response) => {
+    tagRules.forEach((r, idx) => {
+      if (r.calcStatus !== 'calculating' || !r.calcStartedAt) return;
+      const started = Date.parse(r.calcStartedAt);
+      if (Number.isNaN(started) || Date.now() - started < 4000) return;
+      if ((r.name || '').includes('失败') || (r.targetTag?.tag || '').includes('失败')) {
+        tagRules[idx] = {
+          ...r,
+          calcStatus: 'failed',
+          calcError: '中台查询超时，请稍后重试',
+          enabled: false,
+        };
+        return;
+      }
+      if (!r.calcApplied) {
+        applyTagToMembers(r.targetTag, `规则:${r.name}`, r.conditions);
+      }
+      tagRules[idx] = {
+        ...r,
+        calcStatus: 'success',
+        calcError: undefined,
+        calcApplied: true,
+        enabled: true,
+        lastRunAt: nowStr(),
+        lastRunCount: estimateCount(r.conditions),
+        updatedAt: nowStr(),
+      };
+    });
     // 由前端 catalog 为准时也可只返回覆盖人数；这里合并规则信息
     const map = new Map<
       string,
@@ -35,10 +62,14 @@ export default {
         count: number;
         ruleId?: string;
         ruleName?: string;
+        description?: string;
         creator?: string;
         createdAt?: string;
         updatedAt?: string;
         lastRunAt?: string;
+        calcStatus?: string;
+        calcError?: string;
+        enabled?: boolean;
       }
     >();
     tagRules.forEach((r) => {
@@ -49,10 +80,14 @@ export default {
         count: r.lastRunCount || 0,
         ruleId: r.id,
         ruleName: r.name,
+        description: r.description,
         creator: r.creator || 'demo',
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
         lastRunAt: r.lastRunAt,
+        calcStatus: r.calcStatus || 'success',
+        calcError: r.calcError,
+        enabled: r.enabled,
       });
     });
     Object.entries(memberTagStore).forEach(([, list]) => {
@@ -63,11 +98,9 @@ export default {
           tag: t.tag,
           count: 0,
         };
-        // recount from store for accuracy
         map.set(key, prev);
       });
     });
-    // recount all from store
     const counts: Record<string, number> = {};
     Object.values(memberTagStore).forEach((list) => {
       list.forEach((t) => {
@@ -77,13 +110,15 @@ export default {
     });
     const data = Array.from(map.values()).map((row) => ({
       ...row,
-      count: counts[`${row.group}::${row.tag}`] || row.count || 0,
+      count:
+        row.calcStatus === 'calculating' || row.calcStatus === 'failed'
+          ? 0
+          : counts[`${row.group}::${row.tag}`] || row.count || 0,
     }));
-    // also include store-only tags
     Object.keys(counts).forEach((key) => {
       if (!map.has(key)) {
         const [group, tag] = key.split('::');
-        data.push({ group, tag, count: counts[key] });
+        data.push({ group, tag, count: counts[key], calcStatus: 'success', enabled: true });
       }
     });
     res.json({ success: true, data });
@@ -112,24 +147,34 @@ export default {
     res.json({ success: true, data: item });
   },
   'POST /api/tag-center/rules': (req: Request, res: Response) => {
-    const body = (req.body || {}) as Partial<TagRule>;
-    if (!body.name?.trim()) {
+    const body = (req.body || {}) as Partial<TagRule> & { startCalc?: boolean };
+    const targetTag = body.targetTag;
+    const autoName = targetTag?.tag ? `${targetTag.tag}打标规则` : '';
+    const name = String(body.name || autoName || '').trim();
+    if (!name) {
       res.json({ success: false, errorMessage: '请填写规则名称' });
       return;
     }
-    if (!body.targetTag?.group || !body.targetTag?.tag) {
+    if (!targetTag?.group || !targetTag?.tag) {
       res.json({ success: false, errorMessage: '请选择目标标签' });
       return;
     }
+    const startCalc = body.startCalc !== false;
     const item: TagRule = {
       id: `RULE${Date.now() % 100000}`,
-      name: body.name.trim(),
-      targetTag: body.targetTag,
+      name,
+      targetTag,
+      description: body.description ? String(body.description) : undefined,
       conditions: body.conditions || emptyTagRuleConditions(),
-      enabled: body.enabled !== false,
+      centers: (body as any).centers,
+      enabled: startCalc ? false : body.enabled !== false,
       creator: body.creator || 'demo',
       createdAt: nowStr(),
       updatedAt: nowStr(),
+      lastRunCount: 0,
+      calcStatus: startCalc ? 'calculating' : 'success',
+      calcStartedAt: startCalc ? new Date().toISOString() : undefined,
+      calcApplied: !startCalc,
     };
     tagRules.unshift(item);
     res.json({ success: true, data: item });
@@ -140,7 +185,8 @@ export default {
       res.json({ success: false, errorMessage: '规则不存在' });
       return;
     }
-    const body = (req.body || {}) as Partial<TagRule>;
+    const body = (req.body || {}) as Partial<TagRule> & { startCalc?: boolean };
+    const startCalc = Boolean(body.startCalc);
     tagRules[idx] = {
       ...tagRules[idx],
       ...body,
@@ -148,6 +194,16 @@ export default {
       targetTag: body.targetTag || tagRules[idx].targetTag,
       conditions: body.conditions ?? tagRules[idx].conditions,
       updatedAt: nowStr(),
+      ...(startCalc
+        ? {
+            calcStatus: 'calculating' as const,
+            calcStartedAt: new Date().toISOString(),
+            calcError: undefined,
+            calcApplied: false,
+            enabled: false,
+            lastRunCount: 0,
+          }
+        : {}),
     };
     res.json({ success: true, data: tagRules[idx] });
   },
@@ -190,18 +246,17 @@ export default {
       return;
     }
     const rule = tagRules[idx];
-    if (!rule.enabled) {
-      res.json({ success: false, errorMessage: '规则已停用' });
-      return;
-    }
-    const result = applyTagToMembers(rule.targetTag, `规则:${rule.name}`, rule.conditions);
     tagRules[idx] = {
       ...rule,
-      lastRunAt: nowStr(),
-      lastRunCount: result.count,
+      calcStatus: 'calculating',
+      calcStartedAt: new Date().toISOString(),
+      calcError: undefined,
+      calcApplied: false,
+      enabled: false,
+      lastRunCount: 0,
       updatedAt: nowStr(),
     };
-    res.json({ success: true, data: { ...result, rule: tagRules[idx] } });
+    res.json({ success: true, data: { started: true, rule: tagRules[idx] } });
   },
   'POST /api/tag-center/tags/create-crowd': (req: Request, res: Response) => {
     const body = (req.body || {}) as {

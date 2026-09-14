@@ -1,5 +1,5 @@
 /**
- * 分中心（营销平台）数据权限枚举与辅助方法
+ * 平台数据权限枚举与辅助方法
  */
 
 export const MARKETING_CENTERS = [
@@ -35,7 +35,7 @@ export function centersIntersect(
   return recordCenters.some((c) => set.has(c));
 }
 
-/** 列表单元格展示多分中心 */
+/** 列表单元格展示多平台 */
 export function formatCenters(centers?: string[] | null): string {
   if (!centers?.length) return '--';
   return centers.join('、');

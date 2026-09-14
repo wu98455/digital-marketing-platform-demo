@@ -36,7 +36,7 @@ export type SystemRole = {
   description: string;
   menus: MenuAccessKey[];
   operations: OpPermission[];
-  /** 数据权限：分中心（多选） */
+  /** 数据权限：平台（多选） */
   centers: MarketingCenter[];
 };
 
@@ -58,7 +58,7 @@ export type AuditLog = {
   actor: string;
   action: string;
   detail?: string;
-  /** 关联分中心；演示数据可空，列表显示 -- */
+  /** 关联平台；演示数据可空，列表显示 -- */
   centers?: string[];
 };
 
@@ -91,6 +91,7 @@ const ALL_CENTERS: MarketingCenter[] = [...MARKETING_CENTERS];
 
 const ALL_MENUS: MenuAccessKey[] = [
   'welcome',
+  'platform-members',
   'tag-center',
   'crowd',
   'crowd-marketing',
@@ -104,11 +105,23 @@ const ALL_MENUS: MenuAccessKey[] = [
   'system-audit',
   'system-org',
   'tag-center-list',
-  'tag-center-customer',
-  'tag-center-store',
   'tag-center-product',
   'tag-center-campaign',
 ];
+
+/** 已下线菜单：从本地持久化树/角色权限中剔除 */
+const REMOVED_MENU_KEYS = new Set(['tag-center-store', 'tag-center-customer']);
+
+/** 角色菜单键迁移：旧人员数据 → 平台会员 */
+function migrateRoleMenus(menus: MenuAccessKey[] | undefined): MenuAccessKey[] {
+  let next = (menus || []).filter((k) => !REMOVED_MENU_KEYS.has(k));
+  const hadCustomer =
+    (menus || []).includes('tag-center-customer') || (menus || []).includes('tag-center');
+  if (hadCustomer && !next.includes('platform-members')) {
+    next = [...next, 'platform-members'];
+  }
+  return next;
+}
 
 export const DEFAULT_ROLES: SystemRole[] = [
   {
@@ -130,7 +143,7 @@ export const DEFAULT_ROLES: SystemRole[] = [
     id: 'tagger',
     name: '打标与人群运营',
     description: '人群标签与目标人群读写',
-    menus: ['welcome', 'tag-center', 'crowd'],
+    menus: ['welcome', 'platform-members', 'tag-center', 'crowd'],
     operations: ['tag.write', 'crowd.write'],
     centers: ['长寿工惠', '山城工惠'],
   },
@@ -140,6 +153,7 @@ export const DEFAULT_ROLES: SystemRole[] = [
     description: '营销管理读写；标签与人群只读选用',
     menus: [
       'welcome',
+      'platform-members',
       'tag-center',
       'crowd',
       'crowd-marketing',
@@ -221,10 +235,18 @@ export const DEFAULT_MENU_TREE: MenuTreeNode[] = [
   {
     key: 'welcome',
     path: '/analytics',
-    name: '经营分析（二期）',
+    name: '首页',
     icon: 'HomeOutlined',
     builtin: true,
     order: 0,
+  },
+  {
+    key: 'platform-members',
+    path: '/platform-members',
+    name: '平台会员',
+    icon: 'TeamOutlined',
+    builtin: true,
+    order: 1,
   },
   {
     key: 'tag-center',
@@ -232,7 +254,7 @@ export const DEFAULT_MENU_TREE: MenuTreeNode[] = [
     name: '数据打标',
     icon: 'TagsOutlined',
     builtin: true,
-    order: 1,
+    order: 2,
     children: [
       {
         key: 'tag-center-list',
@@ -242,43 +264,29 @@ export const DEFAULT_MENU_TREE: MenuTreeNode[] = [
         order: 0,
       },
       {
-        key: 'tag-center-customer',
-        path: '/tag-center/customer',
-        name: '人员数据',
-        builtin: true,
-        order: 1,
-      },
-      {
-        key: 'tag-center-store',
-        path: '/tag-center/store',
-        name: '店铺数据',
-        builtin: true,
-        order: 2,
-      },
-      {
         key: 'tag-center-product',
         path: '/tag-center/product',
         name: '商品数据',
         builtin: true,
-        order: 3,
+        order: 1,
       },
       {
         key: 'tag-center-campaign',
         path: '/tag-center/campaign',
         name: '专题活动',
         builtin: true,
-        order: 4,
+        order: 2,
       },
     ],
   },
-  { key: 'crowd', path: '/crowd', name: '目标人群', icon: 'UsergroupAddOutlined', builtin: true, order: 2 },
+  { key: 'crowd', path: '/crowd', name: '目标人群', icon: 'UsergroupAddOutlined', builtin: true, order: 3 },
   {
     key: 'crowd-marketing',
     path: '/crowd-marketing',
     name: '营销管理',
     icon: 'NotificationOutlined',
     builtin: true,
-    order: 3,
+    order: 4,
     children: [
       {
         key: 'marketing-activity',
@@ -309,7 +317,7 @@ export const DEFAULT_MENU_TREE: MenuTreeNode[] = [
     name: '系统管理',
     icon: 'SettingOutlined',
     builtin: true,
-    order: 4,
+    order: 5,
     children: [
       { key: 'system-users', path: '/system/users', name: '用户管理', builtin: true, order: 0 },
       { key: 'system-roles', path: '/system/roles', name: '角色权限', builtin: true, order: 1 },
@@ -402,11 +410,11 @@ function buildSeedAuditLogs(): AuditLog[] {
     { actor: 'demo', action: '编辑角色', detail: '营销活动运营 · 菜单权限', dayOffset: 0, hour: 10 },
     { actor: 'demo', action: '更新菜单', detail: '将「目标人群」改名为「人群包」', dayOffset: 0, hour: 11 },
     { actor: 'marketer', action: '登录', detail: '营销运营登录', dayOffset: 0, hour: 11 },
-    { actor: 'marketer', action: '创建活动', detail: '文旅新客召回-演示', dayOffset: 0, hour: 12 },
-    { actor: 'WangSiyi', action: '审批通过', detail: '文旅新客召回-演示', dayOffset: 0, hour: 14 },
-    { actor: 'marketer', action: '正式执行', detail: '文旅新客召回-演示', dayOffset: 0, hour: 15 },
+    { actor: 'marketer', action: '创建活动', detail: '乐和乐都亲子年卡召回', dayOffset: 0, hour: 12 },
+    { actor: 'WangSiyi', action: '审批通过', detail: '乐和乐都亲子年卡召回', dayOffset: 0, hour: 14 },
+    { actor: 'marketer', action: '正式执行', detail: '乐和乐都亲子年卡召回', dayOffset: 0, hour: 15 },
     { actor: 'tagger', action: '登录', detail: '打标运营登录', dayOffset: 1, hour: 9 },
-    { actor: 'tagger', action: '重新打标', detail: '高价值会员', dayOffset: 1, hour: 10 },
+    { actor: 'tagger', action: '重新打标', detail: '近90天订单金额大于等于500', dayOffset: 1, hour: 10 },
     { actor: 'tagger', action: '新建标签规则', detail: '近30天下单会员', dayOffset: 1, hour: 11 },
     { actor: 'demo', action: '新建用户', detail: 'ops01', dayOffset: 1, hour: 14 },
     { actor: 'demo', action: '重置密码', detail: 'ops01', dayOffset: 1, hour: 14 },
@@ -416,9 +424,9 @@ function buildSeedAuditLogs(): AuditLog[] {
     { actor: 'demo', action: '删除菜单', detail: '帮助中心（外链）', dayOffset: 2, hour: 10 },
     { actor: 'demo', action: '重置菜单默认', detail: '', dayOffset: 2, hour: 10 },
     { actor: 'admin', action: '登录', detail: '系统管理员登录', dayOffset: 2, hour: 11 },
-    { actor: 'marketer', action: '创建活动', detail: '沉默客唤醒-周期', dayOffset: 2, hour: 13 },
-    { actor: 'demo', action: '审批通过', detail: '沉默客唤醒-周期', dayOffset: 2, hour: 15 },
-    { actor: 'marketer', action: '正式执行', detail: '沉默客唤醒-周期', dayOffset: 2, hour: 16 },
+    { actor: 'marketer', action: '创建活动', detail: '沉默大会员唤醒-周期', dayOffset: 2, hour: 13 },
+    { actor: 'demo', action: '审批通过', detail: '沉默大会员唤醒-周期', dayOffset: 2, hour: 15 },
+    { actor: 'marketer', action: '正式执行', detail: '沉默大会员唤醒-周期', dayOffset: 2, hour: 16 },
     { actor: 'tagger', action: '新建人群', detail: '暑期亲子游意向', dayOffset: 3, hour: 10 },
     { actor: 'demo', action: '编辑用户', detail: 'WangSiyi · 允许自审', dayOffset: 3, hour: 11 },
     { actor: 'demo', action: '登录', detail: '演示管理员登录', dayOffset: 3, hour: 18 },
@@ -475,11 +483,12 @@ export function cloneTree(nodes: MenuTreeNode[]): MenuTreeNode[] {
   }));
 }
 
-/** 去掉与父级同 path / 同名的异常子节点（避免侧栏出现重复「系统管理」） */
+/** 去掉已下线菜单，以及与父级同 path / 同名的异常子节点（避免侧栏出现重复「系统管理」） */
 export function sanitizeMenuTree(nodes: MenuTreeNode[], parent?: MenuTreeNode): MenuTreeNode[] {
   const parentPath = parent?.path?.replace(/\/$/, '') || '';
   return nodes
     .filter((n) => {
+      if (REMOVED_MENU_KEYS.has(n.key)) return false;
       if (!parent) return true;
       const path = (n.path || '').replace(/\/$/, '');
       if (n.key === parent.key) return false;
@@ -500,6 +509,44 @@ function markBuiltin(nodes: MenuTreeNode[]): MenuTreeNode[] {
     order: n.order ?? idx,
     children: n.children ? markBuiltin(n.children) : undefined,
   }));
+}
+
+/** 本地持久化菜单树：补「平台会员」、去掉旧人员数据、首页命名对齐 */
+function ensureBuiltinMenuLayout(nodes: MenuTreeNode[]): MenuTreeNode[] {
+  let next = nodes.map((n) => {
+    if (n.key === 'welcome') {
+      return {
+        ...n,
+        name: '首页',
+        path: n.path || '/analytics',
+      };
+    }
+    if (n.key === 'tag-center' && n.children?.length) {
+      return {
+        ...n,
+        children: n.children.filter((c) => c.key !== 'tag-center-customer'),
+      };
+    }
+    return n;
+  });
+  const flat = flattenMenuTree(next);
+  if (!flat.some((n) => n.key === 'platform-members')) {
+    const welcomeIdx = next.findIndex((n) => n.key === 'welcome');
+    const insertAt = welcomeIdx >= 0 ? welcomeIdx + 1 : 1;
+    next = [
+      ...next.slice(0, insertAt),
+      {
+        key: 'platform-members',
+        path: '/platform-members',
+        name: '平台会员',
+        icon: 'TeamOutlined',
+        builtin: true,
+        order: 1,
+      },
+      ...next.slice(insertAt),
+    ];
+  }
+  return markBuiltin(next);
 }
 
 export function getUsers(): SystemUser[] {
@@ -526,6 +573,7 @@ export function getRoles(): SystemRole[] {
       })),
     ).map((r) => ({
       ...r,
+      menus: migrateRoleMenus(r.menus),
       centers: normalizeCenters(r.centers?.length ? r.centers : ALL_CENTERS),
     }));
   }
@@ -535,6 +583,7 @@ export function getRoles(): SystemRole[] {
 export function saveRoles(list: SystemRole[]) {
   rolesMem = list.map((r) => ({
     ...r,
+    menus: migrateRoleMenus(r.menus),
     centers: normalizeCenters(r.centers),
   }));
   writeJson(ROLES_KEY, rolesMem);
@@ -548,14 +597,14 @@ export function getMenuTree(): MenuTreeNode[] {
   if (!menuTreeMem) {
     const stored = readJson<MenuTreeNode[] | null>(MENU_TREE_KEY, null);
     menuTreeMem = stored?.length
-      ? sanitizeMenuTree(cloneTree(stored))
+      ? ensureBuiltinMenuLayout(sanitizeMenuTree(cloneTree(stored)))
       : markBuiltin(cloneTree(DEFAULT_MENU_TREE));
   }
   return menuTreeMem;
 }
 
 export function saveMenuTree(list: MenuTreeNode[]) {
-  menuTreeMem = sanitizeMenuTree(list);
+  menuTreeMem = ensureBuiltinMenuLayout(sanitizeMenuTree(list));
   writeJson(MENU_TREE_KEY, menuTreeMem);
 }
 
@@ -802,7 +851,7 @@ export function getRoleById(roleId: RoleId) {
   return getRoles().find((r) => r.id === roleId) || DEFAULT_ROLES[0];
 }
 
-/** 当前用户角色可用的分中心（数据权限） */
+/** 当前用户角色可用的平台（数据权限） */
 export function getCentersForUsername(username?: string): MarketingCenter[] {
   if (!username) return [];
   const user = findUserByUsername(username);

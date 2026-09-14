@@ -75,7 +75,7 @@ const AccountSettings: React.FC = () => {
               <Descriptions.Item label="数据权限">
                 {(accountMeta.role?.centers || []).length
                   ? accountMeta.role!.centers.join('、')
-                  : '未配置分中心'}
+                  : '未配置平台'}
               </Descriptions.Item>
               <Descriptions.Item label="最近登录">
                 {accountMeta.user?.lastLoginAt || '--'}

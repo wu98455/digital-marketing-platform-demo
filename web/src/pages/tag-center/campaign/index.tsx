@@ -120,7 +120,7 @@ const CampaignTaggingPage: React.FC = () => {
       },
     },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centerSearch',
       hideInTable: true,
       valueType: 'select',
@@ -155,7 +155,7 @@ const CampaignTaggingPage: React.FC = () => {
       },
     },
     {
-      title: '分中心',
+      title: '平台',
       dataIndex: 'centers',
       search: false,
       width: 180,
